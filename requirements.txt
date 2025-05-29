@@ -1,0 +1,57 @@
+# Web framework and server
+fastapi
+uvicorn[standard]
+python-multipart>=0.0.6
+starlette  # Explicitly included for compression middleware
+
+# Database
+sqlalchemy
+asyncpg  # Added for PostgreSQL
+psycopg2-binary  # Added for PostgreSQL (needed for SQLAlchemy)
+alembic
+aiosqlite  # Added for async SQLite support
+greenlet>=2.0.0  # Required for SQLAlchemy async
+
+# Async utilities
+aiofiles
+
+# Environment and configuration
+python-dotenv
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+email-validator  # Required for EmailStr validation
+
+# Security and authentication
+python-jose[cryptography]
+passlib[bcrypt]
+cryptography
+
+
+# Data handling and validation
+python-dateutil
+python-slugify
+
+# Content processing
+Pillow  # For image handling
+Markdown
+bleach  # HTML sanitization
+Jinja2  # For templating
+
+# Testing
+pytest
+pytest-asyncio
+httpx
+
+# Development tools
+black
+flake8
+isort
+mypy
+pre-commit
+python-slugify==8.0.1
+Markdown==3.5
+bleach==6.1.0
+Jinja2==3.1.2
+
+# AWS SDK
+boto3>=1.26.0
