@@ -1,7 +1,5 @@
 from datetime import datetime
-from typing import Optional, List
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, JSON
 from sqlalchemy.sql import func
 
 from shared.database import Base
@@ -14,71 +12,40 @@ class NewsCategory(Base):
     name = Column(String(50), unique=True, nullable=False)
     slug = Column(String(50), unique=True, nullable=False, index=True)
     description = Column(String(255))
-    
-    # Relationships
-    articles = relationship(
-        "NewsArticle",
-        secondary="news_article_categories",
-        back_populates="categories"
-    )
 
 class NewsArticle(Base):
     """Enhanced news article model with comprehensive content components."""
     __tablename__ = "news_articles"
     
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)                    # Title/Headline
+    title = Column(String(255), nullable=False)
     slug = Column(String(255), unique=True, nullable=False, index=True)
-    content = Column(Text, nullable=False)                         # Full Content
-    excerpt = Column(String(500))                                  # Short Summary
-    image_url = Column(String(255))                                # Featured Image
-    author_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Author
-    source = Column(String(255))                                   # Source
-    published_at = Column(DateTime, default=func.now())            # Publish Date & Time
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    content = Column(Text, nullable=False)
+    excerpt = Column(String(500))
+    image_url = Column(String(255))
+    source = Column(String(255))
+    tags = Column(String(255))  # Keywords/Tags as comma-separated string
     published = Column(Boolean, default=False)
     featured = Column(Boolean, default=False)
-    contact_info = Column(Text)                                    # Contact Information
-    view_count = Column(Integer, default=0)
-    share_count = Column(Integer, default=0)                       # For Social Sharing tracking
-    comment_count = Column(Integer, default=0)
-    allow_comments = Column(Boolean, default=True)                 # Comments Section toggle
-    seo_title = Column(String(255))                                # SEO
-    meta_description = Column(String(255))                         # SEO
-    og_image_url = Column(String(255))                             # Social preview image
-    related_news = Column(JSON)                                    # Related News/Events links
-    tags = Column(String(255))                                     # Keywords/Tags as comma-separated string
+    allow_comments = Column(Boolean, default=True)
+    seo_title = Column(String(255))
+    meta_description = Column(String(255))
+    og_image_url = Column(String(255))
+    contact_info = Column(Text)
     
-    # Relationships
-    author = relationship("User", back_populates="news_articles")
-    categories = relationship(
-        "NewsCategory",
-        secondary="news_article_categories",
-        back_populates="articles"
-    )
-    comments = relationship("NewsComment", back_populates="article", cascade="all, delete-orphan")
-
-class NewsArticleCategory(Base):
-    """Association table for news articles and categories."""
-    __tablename__ = "news_article_categories"
+    # Event-specific fields (for when this is used as an event)
+    venue = Column(String(255))
+    location = Column(String(255))
+    registration_link = Column(String(255))
+    ticket_price = Column(String(100))
+    event_start_date = Column(DateTime)
+    event_end_date = Column(DateTime)
     
-    article_id = Column(Integer, ForeignKey("news_articles.id"), primary_key=True)
-    category_id = Column(Integer, ForeignKey("news_categories.id"), primary_key=True)
-
-class NewsComment(Base):
-    """News comment model."""
-    __tablename__ = "news_comments"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    article_id = Column(Integer, ForeignKey("news_articles.id"), nullable=False)
-    parent_id = Column(Integer, ForeignKey("news_comments.id"), nullable=True)
-    author_name = Column(String(100), nullable=False)
-    author_email = Column(String(100), nullable=False)
-    content = Column(Text, nullable=False)
-    is_approved = Column(Boolean, default=False)
+    # Timestamps
+    published_at = Column(DateTime, default=func.now())
     created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
-    # Relationships
-    article = relationship("NewsArticle", back_populates="comments")
-    parent = relationship("NewsComment", remote_side=[id], backref="replies")
+    # Relationships as JSON (simplified)
+    category_ids = Column(JSON, default=list)
+    related_news_ids = Column(JSON, default=list)

@@ -6,10 +6,14 @@ from typing import Optional
 class Settings(BaseSettings):
     """Application settings using Pydantic."""
     
-    # Database configuration - SQLite
-    DB_PATH: str = "foundation.db"
+    # Database configuration - PostgreSQL
+    POSTGRES_USER: str = "foundation_user"
+    POSTGRES_PASSWORD: str = ""
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str = "foundation_db"
     
-    # Database URL for SQLAlchemy - SQLite
+    # Database URL for SQLAlchemy - PostgreSQL
     DATABASE_URL: Optional[str] = None
     
     # Application settings
@@ -50,8 +54,8 @@ class Settings(BaseSettings):
     @model_validator(mode='after')
     def construct_database_url(self):
         """Construct DATABASE_URL if not provided."""
-        if not self.DATABASE_URL:
-            self.DATABASE_URL = f"sqlite:///{self.DB_PATH}"
+        # Force PostgreSQL for development
+        self.DATABASE_URL = f"postgresql+asyncpg://{self.POSTGRES_USER}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         return self
 
 @lru_cache()

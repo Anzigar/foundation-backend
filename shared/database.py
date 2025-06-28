@@ -8,11 +8,9 @@ from config import settings
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Make sure we're using the async SQLite driver if using SQLite
+# Use the database URL from settings
 database_url = settings.DATABASE_URL
-if database_url.startswith('sqlite://') and not database_url.startswith('sqlite+aiosqlite://'):
-    database_url = database_url.replace('sqlite://', 'sqlite+aiosqlite://', 1)
-    logger.info(f"Modified database URL to use async SQLite driver: {database_url}")
+logger.info(f"Using database URL: {database_url}")
 
 # Create SQLAlchemy engine
 engine = create_async_engine(

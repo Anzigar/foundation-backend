@@ -16,9 +16,15 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+# Import all models to ensure they're registered with Base
+from blog.models import *
+from news.models import *
+from projects.models import *
+from contacts.models import *
+from shared.media_models import *
+from shared.database import Base
+
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

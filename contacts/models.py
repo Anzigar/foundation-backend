@@ -11,9 +11,9 @@ class Contact(Base):
     __tablename__ = "contacts"
     
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False)
+    full_name = Column(String(100), nullable=False)  # Updated field name
     email = Column(String(100), nullable=False, index=True)
-    phoneNumber = Column(String(12), nullable=True)
+    phone_number = Column(String(20), nullable=True)  # Updated field name
     subject = Column(String(255))
     message = Column(Text, nullable=False)
     created_at = Column(DateTime, default=func.now())
@@ -31,6 +31,6 @@ class NewsletterSubscriber(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(100), unique=True, nullable=False, index=True)
     name = Column(String(100))
+    source = Column(String(50), default="Website")  # Source of subscription
     subscribed_at = Column(DateTime, default=func.now())
     is_active = Column(Boolean, default=True, index=True)
-    source = Column(String(50))

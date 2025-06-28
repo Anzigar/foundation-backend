@@ -11,6 +11,7 @@ from events.schemas import (
     EventRegistrationResponse
 )
 from shared.utils import generate_slug
+from shared.helpers import fetch_all, fetch_one, execute_query
 
 router = APIRouter()
 
@@ -32,17 +33,17 @@ async def get_events(
     # Base query with field projection
     query = """
     SELECT 
-        id, title, slug, location, start_date, end_date, 
-        image_url, organizer_id, published, featured
+        id, title, slug, excerpt, location, event_date,
+        image_url, author_name, is_published, featured
     FROM events
-    WHERE published = 1
+    WHERE is_published = true
     """
     
     params = []
     
     # Apply filters
     if upcoming:
-        query += " AND start_date >= %s"
+        query += " AND event_date >= %s"
         params.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
     if featured is not None:
@@ -50,7 +51,7 @@ async def get_events(
         params.append(featured)
     
     if search:
-        query += " AND (title LIKE %s OR description LIKE %s)"
+        query += " AND (title ILIKE %s OR content ILIKE %s)"
         search_term = f"%{search}%"
         params.extend([search_term, search_term])
     
@@ -88,12 +89,27 @@ async def get_events(
         "has_more": has_more
     }
 
+@router.get("/id/{event_id}", response_model=EventResponse)
+async def get_event_by_id(event_id: int):
+    """Get a single event by ID using raw SQL."""
+    query = """
+    SELECT * FROM events
+    WHERE id = %s AND is_published = true
+    """
+    
+    event = await fetch_one(query, (event_id,))
+    
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    
+    return event
+
 @router.get("/{slug}", response_model=EventResponse)
 async def get_event(slug: str):
     """Get a single event by slug using raw SQL."""
     query = """
     SELECT * FROM events
-    WHERE slug = %s AND published = 1
+    WHERE slug = %s AND is_published = true
     """
     
     event = await fetch_one(query, (slug,))
@@ -113,25 +129,22 @@ async def create_event(event: EventCreate):
     # Insert the event
     query = """
     INSERT INTO events 
-    (title, slug, description, location, start_date, end_date, image_url, organizer_id, published, featured)
+    (title, slug, content, excerpt, location, event_date, image_url, author_name, is_published, featured)
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-    
-    # Replace with actual organizer ID from authentication
-    organizer_id = 1
     
     await execute_query(
         query, 
         (
             event.title, 
             event.slug, 
-            event.description, 
+            event.content,
+            event.excerpt, 
             event.location, 
-            event.start_date, 
-            event.end_date, 
+            event.event_date,
             event.image_url, 
-            organizer_id,
-            event.published, 
+            event.author_name,
+            event.is_published, 
             event.featured
         )
     )
@@ -161,27 +174,19 @@ async def update_event(event_id: int, event_update: EventUpdate):
         params.append(slug)
     
     if event_update.description is not None:
-        update_fields.append("description = %s")
+        update_fields.append("content = %s")
         params.append(event_update.description)
     
     if event_update.location is not None:
         update_fields.append("location = %s")
         params.append(event_update.location)
     
-    if event_update.start_date is not None:
-        update_fields.append("start_date = %s")
-        params.append(event_update.start_date)
-    
-    if event_update.end_date is not None:
-        update_fields.append("end_date = %s")
-        params.append(event_update.end_date)
-    
     if event_update.image_url is not None:
         update_fields.append("image_url = %s")
         params.append(event_update.image_url)
     
     if event_update.published is not None:
-        update_fields.append("published = %s")
+        update_fields.append("is_published = %s")
         params.append(event_update.published)
     
     if event_update.featured is not None:
@@ -225,7 +230,7 @@ async def register_for_event(event_id: int, registration: EventRegistrationCreat
     """Register for an event."""
     # Check if event exists and is published
     event = await fetch_one(
-        "SELECT id FROM events WHERE id = %s AND published = 1", 
+        "SELECT id FROM events WHERE id = %s AND is_published = true", 
         (event_id,)
     )
     

@@ -26,6 +26,30 @@ health_router = APIRouter()
 async def health():
     return {"status": "healthy"}
 
+@health_router.get("/")
+async def api_root():
+    """API root endpoint for health checks and basic info."""
+    return {
+        "message": "Foundation API",
+        "version": "1.0.0",
+        "status": "healthy",
+        "endpoints": {
+            "news": "/api/news",
+            "events": "/api/events", 
+            "blog": "/api/blog",
+            "projects": "/api/projects",
+            "contacts": "/api/contacts",
+            "uploads": "/api/uploads",
+            "health": "/api/health",
+            "docs": "/api/docs"
+        }
+    }
+
+@health_router.head("/")
+async def api_head():
+    """Handle HEAD requests to the API root."""
+    return {}
+
 app = FastAPI(
     title="Foundation API",
     description="API for the Foundation website",
@@ -153,4 +177,4 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))
     
     # Using port 5001 instead of 5000 to avoid potential conflicts
-    uvicorn.run("main:app", host="0.0.0.0", port=5001, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

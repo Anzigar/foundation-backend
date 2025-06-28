@@ -3,9 +3,9 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 class ContactBase(BaseModel):
-    name: str
+    full_name: str
     email: str
-    phoneNumber: Optional[str] = None  # Added phone number field
+    phone_number: Optional[str] = None
     subject: str
     message: str
 
@@ -21,7 +21,6 @@ class ContactResponse(ContactBase):
     
     class Config:
         from_attributes = True
-        # Allow conversion from strings for datetime fields
         json_encoders = {
             datetime: lambda v: v.isoformat() if isinstance(v, datetime) else v
         }
@@ -29,3 +28,17 @@ class ContactResponse(ContactBase):
 class ContactUpdate(BaseModel):
     responded: bool = True
     responded_by: int
+
+# Newsletter schemas
+class NewsletterSubscriptionBase(BaseModel):
+    email: str
+    name: Optional[str] = None
+    source: str = "Website"
+
+class NewsletterSubscriptionCreate(NewsletterSubscriptionBase):
+    pass
+
+class NewsletterSubscriptionResponse(NewsletterSubscriptionBase):
+    id: int
+    subscribed_at: datetime
+    is_active: bool = True

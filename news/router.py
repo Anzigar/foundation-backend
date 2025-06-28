@@ -7,11 +7,10 @@ from news.schemas import (
     NewsArticleCreate, 
     NewsArticleResponse, 
     NewsArticleUpdate, 
-    NewsArticleListItem,
-    NewsCategoryResponse,
-    NewsCategoryCreate
+    NewsArticleListItem
 )
 from shared.utils import generate_slug
+from shared.helpers import fetch_all, fetch_one, execute_query
 
 router = APIRouter()
 
@@ -66,47 +65,45 @@ async def get_news_articles(
     - Field projection (selecting only needed fields)
     - Response caching
     """
-    # Base query with joins to get categories
+    # Base query - simplified to match our actual schema
     query = """
     SELECT 
-        n.id, n.title, n.slug, n.excerpt, n.image_url, n.author_id, 
-        n.published_at, n.created_at, n.updated_at, n.published, n.featured,
-        c.id as category_id, c.name as category_name, c.slug as category_slug
-    FROM news_articles n
-    LEFT JOIN news_article_categories nac ON n.id = nac.article_id
-    LEFT JOIN news_categories c ON nac.category_id = c.id
-    WHERE n.published = 1
+        id, title, slug, excerpt, image_url, author_name, 
+        created_at, updated_at, is_published, featured, category
+    FROM news_articles
+    WHERE is_published = true
     """
     
     params = []
     
     # Apply filters
     if category_id:
-        query += " AND c.id = %s"
-        params.append(category_id)
+        # For now, we'll ignore category_id since we don't have a categories table
+        # but we could filter by the category string field if needed
+        pass
     
     if featured is not None:
-        query += " AND n.featured = %s"
+        query += " AND featured = %s"
         params.append(featured)
     
     if search:
-        query += " AND (n.title LIKE %s OR n.content LIKE %s)"
+        query += " AND (title ILIKE %s OR excerpt ILIKE %s)"
         search_term = f"%{search}%"
         params.extend([search_term, search_term])
     
     # Apply cursor pagination
     if cursor:
         if order.lower() == "desc":
-            query += " AND n.id < %s"
+            query += " AND id < %s"
         else:
-            query += " AND n.id > %s"
+            query += " AND id > %s"
         params.append(cursor)
     
     # Order the results
     if order.lower() == "desc":
-        query += " ORDER BY n.id DESC"
+        query += " ORDER BY id DESC"
     else:
-        query += " ORDER BY n.id ASC"
+        query += " ORDER BY id ASC"
     
     # Get one more item to check if there are more results
     query += f" LIMIT {limit + 1}"
@@ -114,8 +111,23 @@ async def get_news_articles(
     # Execute the query with parameters
     news_items = await fetch_all(query, tuple(params) if params else None)
     
-    # Format the results
-    formatted_news = format_news_with_categories(news_items)
+    # Format the results (simplified without categories)
+    formatted_news = []
+    for item in news_items:
+        formatted_item = {
+            "id": item["id"],
+            "title": item["title"], 
+            "slug": item["slug"],
+            "excerpt": item["excerpt"],
+            "image_url": item["image_url"],
+            "author_name": item["author_name"],
+            "category": item["category"],
+            "created_at": item["created_at"],
+            "updated_at": item["updated_at"],
+            "is_published": item["is_published"],
+            "featured": item["featured"]
+        }
+        formatted_news.append(formatted_item)
     
     # Check if there are more results
     has_more = len(formatted_news) > limit
@@ -131,29 +143,41 @@ async def get_news_articles(
         "has_more": has_more
     }
 
+@router.get("/id/{article_id}", response_model=NewsArticleResponse)
+async def get_news_article_by_id(article_id: int):
+    """Get a single news article by ID using raw SQL."""
+    query = """
+    SELECT 
+        id, title, slug, content, excerpt, image_url, author_name,
+        created_at, updated_at, is_published, featured, category
+    FROM news_articles
+    WHERE id = %s AND is_published = true
+    """
+    
+    article = await fetch_one(query, (article_id,))
+    
+    if not article:
+        raise HTTPException(status_code=404, detail="News article not found")
+    
+    return article
+
 @router.get("/{slug}", response_model=NewsArticleResponse)
 async def get_news_article(slug: str):
     """Get a single news article by slug using raw SQL."""
     query = """
     SELECT 
-        n.id, n.title, n.slug, n.content, n.excerpt, n.image_url, n.author_id, 
-        n.published_at, n.created_at, n.updated_at, n.published, n.featured,
-        c.id as category_id, c.name as category_name, c.slug as category_slug
-    FROM news_articles n
-    LEFT JOIN news_article_categories nac ON n.id = nac.article_id
-    LEFT JOIN news_categories c ON nac.category_id = c.id
-    WHERE n.slug = %s AND n.published = 1
+        id, title, slug, content, excerpt, image_url, author_name,
+        created_at, updated_at, is_published, featured, category
+    FROM news_articles
+    WHERE slug = %s AND is_published = true
     """
     
-    news_items = await fetch_all(query, (slug,))
+    article = await fetch_one(query, (slug,))
     
-    if not news_items:
+    if not article:
         raise HTTPException(status_code=404, detail="News article not found")
     
-    # Format the result
-    formatted_news = format_news_with_categories(news_items)
-    
-    return formatted_news[0]
+    return article
 
 @router.post("/", response_model=NewsArticleResponse, status_code=status.HTTP_201_CREATED)
 async def create_news_article(article: NewsArticleCreate):
@@ -165,12 +189,12 @@ async def create_news_article(article: NewsArticleCreate):
     # Insert the news article
     query = """
     INSERT INTO news_articles 
-    (title, slug, content, excerpt, image_url, author_id, published, featured)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    (title, slug, content, excerpt, image_url, author_name, is_published, featured, category, created_at, updated_at)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
-    # Replace with actual author ID from authentication
-    author_id = 1
+    from datetime import datetime
+    now = datetime.now()
     
     await execute_query(
         query, 
@@ -180,38 +204,18 @@ async def create_news_article(article: NewsArticleCreate):
             article.content, 
             article.excerpt, 
             article.image_url, 
-            author_id,
-            article.published, 
-            article.featured
+            article.author_name,
+            article.is_published, 
+            article.featured,
+            article.category,
+            now,
+            now
         )
     )
     
-    # Get the inserted article ID
-    article_id = await fetch_one("SELECT LAST_INSERT_ID() as id")
-    article_id = article_id["id"]
-    
-    # Add categories if provided
-    if article.category_ids:
-        values = []
-        params = []
-        
-        for category_id in article.category_ids:
-            values.append("(%s, %s)")
-            params.extend([article_id, category_id])
-        
-        if values:
-            category_query = f"""
-            INSERT INTO news_article_categories (article_id, category_id)
-            VALUES {', '.join(values)}
-            """
-            
-            await execute_query(category_query, tuple(params))
-    
-    # Clear cache
-    await clear_cache(pattern="news:list*")
-    
     # Get the newly created article
-    return await get_news_article(article.slug)
+    result = await fetch_one("SELECT * FROM news_articles WHERE slug = %s", (article.slug,))
+    return result
 
 @router.put("/{article_id}", response_model=NewsArticleResponse)
 async def update_news_article(article_id: int, article_update: NewsArticleUpdate):
@@ -246,9 +250,9 @@ async def update_news_article(article_id: int, article_update: NewsArticleUpdate
         update_fields.append("image_url = %s")
         params.append(article_update.image_url)
     
-    if article_update.published is not None:
-        update_fields.append("published = %s")
-        params.append(article_update.published)
+    if article_update.is_published is not None:
+        update_fields.append("is_published = %s")
+        params.append(article_update.is_published)
     
     if article_update.featured is not None:
         update_fields.append("featured = %s")
@@ -258,48 +262,18 @@ async def update_news_article(article_id: int, article_update: NewsArticleUpdate
     if update_fields:
         update_query = f"""
         UPDATE news_articles 
-        SET {', '.join(update_fields)}
+        SET {', '.join(update_fields)}, updated_at = %s
         WHERE id = %s
         """
         
+        from datetime import datetime
+        params.append(datetime.now())
         params.append(article_id)
         await execute_query(update_query, tuple(params))
     
-    # Update categories if provided
-    if article_update.category_ids is not None:
-        # First delete existing categories
-        await execute_query(
-            "DELETE FROM news_article_categories WHERE article_id = %s", 
-            (article_id,)
-        )
-        
-        # Then add new categories
-        if article_update.category_ids:
-            values = []
-            params = []
-            
-            for category_id in article_update.category_ids:
-                values.append("(%s, %s)")
-                params.extend([article_id, category_id])
-            
-            if values:
-                category_query = f"""
-                INSERT INTO news_article_categories (article_id, category_id)
-                VALUES {', '.join(values)}
-                """
-                
-                await execute_query(category_query, tuple(params))
-    
-    # Clear cache
-    article_slug = await fetch_one(
-        "SELECT slug FROM news_articles WHERE id = %s", 
-        (article_id,)
-    )
-    await clear_cache(pattern=f"news:detail:{article_slug['slug']}")
-    await clear_cache(pattern="news:list*")
-    
-    # Get the updated article
-    return await get_news_article(article_slug["slug"])
+    # Get the updated article by ID
+    result = await fetch_one("SELECT * FROM news_articles WHERE id = %s", (article_id,))
+    return result
 
 @router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_news_article(article_id: int):
@@ -317,30 +291,29 @@ async def delete_news_article(article_id: int):
     await execute_query("DELETE FROM news_articles WHERE id = %s", (article_id,))
     
     # Clear cache
-    await clear_cache(pattern=f"news:detail:{article['slug']}")
-    await clear_cache(pattern="news:list*")
+    # await clear_cache(pattern=f"news:detail:{article['slug']}")
+    # await clear_cache(pattern="news:list*")
     
     return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)
 
-# Add routes for categories
-@router.get("/categories/", response_model=List[NewsCategoryResponse])
-async def get_news_categories():
-    """Get all news categories."""
-    categories = await fetch_all("SELECT id, name, slug FROM news_categories ORDER BY name")
-    return categories
-
-@router.post("/categories/", response_model=NewsCategoryResponse, status_code=status.HTTP_201_CREATED)
-async def create_news_category(category: NewsCategoryCreate):
-    """Create a new news category."""
+@router.patch("/{article_id}/publish", response_model=NewsArticleResponse)
+async def toggle_news_article_publish(article_id: int):
+    """Toggle the published status of a news article."""
+    # First check if the article exists
+    existing = await fetch_one("SELECT id, is_published FROM news_articles WHERE id = %s", (article_id,))
+    
+    if not existing:
+        raise HTTPException(status_code=404, detail="News article not found")
+    
+    # Toggle the published status
+    new_published_status = not existing["is_published"]
+    
+    # Update the article
     await execute_query(
-        "INSERT INTO news_categories (name, slug) VALUES (%s, %s)",
-        (category.name, category.slug)
+        "UPDATE news_articles SET is_published = %s, updated_at = %s WHERE id = %s",
+        (new_published_status, datetime.now(), article_id)
     )
     
-    category_id = await fetch_one("SELECT LAST_INSERT_ID() as id")
-    
-    return {
-        "id": category_id["id"],
-        "name": category.name,
-        "slug": category.slug
-    }
+    # Get the updated article
+    result = await fetch_one("SELECT * FROM news_articles WHERE id = %s", (article_id,))
+    return result

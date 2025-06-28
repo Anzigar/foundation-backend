@@ -15,7 +15,7 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=trust  # Allow connections without password
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
-      - ./database:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
       - ./database/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -29,6 +29,7 @@ networks:
     external: true
 
 volumes:
+  postgres_data:
   media_volume:
   static_volume:
 

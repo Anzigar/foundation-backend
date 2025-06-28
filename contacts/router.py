@@ -5,13 +5,23 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from contacts.schemas import ContactCreate, ContactResponse, ContactUpdate
+from contacts.schemas import (
+    ContactCreate, 
+    ContactResponse, 
+    ContactUpdate,
+    NewsletterSubscriptionCreate
+)
 from shared.database import get_db
+from shared.helpers import fetch_all, fetch_one, execute_query
+
+# Constants
+CONTACT_NOT_FOUND = "Contact not found"
+SELECT_CONTACT_BY_ID = "SELECT * FROM contacts WHERE id = ?"
 
 router = APIRouter()
 
-# Import the helper functions or create them here
-from blog.router import fetch_all, fetch_one, execute_query
+# Import the helper functions
+from shared.helpers import fetch_all, fetch_one, execute_query
 
 @router.get("/", response_model=Dict[str, Any])
 async def get_contacts(
@@ -86,14 +96,14 @@ async def get_contact(contact_id: int, db: AsyncSession = Depends(get_db)):
 async def create_contact(contact: ContactCreate, db: AsyncSession = Depends(get_db)):
     """Create a new contact submission using raw SQL."""
     query = """
-    INSERT INTO contacts (name, email, phoneNumber, subject, message)
+    INSERT INTO contacts (full_name, email, phone_number, subject, message)
     VALUES (?, ?, ?, ?, ?)
     """
     
     try:
         await execute_query(
             query, 
-            (contact.name, contact.email, contact.phoneNumber, contact.subject, contact.message),
+            (contact.full_name, contact.email, contact.phone_number, contact.subject, contact.message),
             db
         )
         
@@ -194,3 +204,36 @@ async def delete_contact(contact_id: int):
   
     
     return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)
+
+# Newsletter subscription endpoint
+from contacts.schemas import NewsletterSubscriptionCreate
+
+@router.post("/newsletter/subscribe", status_code=status.HTTP_201_CREATED)
+async def subscribe_newsletter(
+    subscription: NewsletterSubscriptionCreate, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Subscribe to newsletter."""
+    # Check if email already exists
+    existing = await fetch_one(
+        "SELECT id FROM newsletter_subscribers WHERE email = ?",
+        (subscription.email,),
+        db
+    )
+    
+    if existing:
+        # Update existing subscription
+        await execute_query(
+            "UPDATE newsletter_subscribers SET is_active = ?, name = ?, source = ? WHERE email = ?",
+            (True, subscription.name, subscription.source, subscription.email),
+            db
+        )
+        return {"message": "Newsletter subscription updated"}
+    else:
+        # Create new subscription
+        await execute_query(
+            "INSERT INTO newsletter_subscribers (email, name, source) VALUES (?, ?, ?)",
+            (subscription.email, subscription.name, subscription.source),
+            db
+        )
+        return {"message": "Successfully subscribed to newsletter"}

@@ -13,9 +13,15 @@ from projects.schemas import (
     ProjectImageResponse
 )
 from shared.utils import generate_slug
-from api.uploads import upload_image
+from shared.database import get_db
+from shared.storage import storage
+from shared.helpers import fetch_all, fetch_one, execute_query
 
 router = APIRouter()
+
+# Constants
+PROJECT_NOT_FOUND = "Project not found"
+IMAGE_NOT_FOUND = "Image not found"
 
 @router.get("/", response_model=Dict[str, Any])
 async def get_projects(
@@ -25,19 +31,17 @@ async def get_projects(
     featured: Optional[bool] = Query(None, description="Filter by featured status"),
     search: Optional[str] = Query(None, description="Search in title or description")
 ):
-    """
-    Get paginated projects with cursor-based pagination.
-    """
-    # Base query
+    """Get paginated projects with cursor-based pagination."""
+    # Base query - updated to match actual model structure
     query = """
     SELECT 
-        p.id, p.title, p.slug, p.description, p.timeline, 
-        p.featured, p.created_at,
+        p.id, p.title, p.slug, p.description, p.project_image, 
+        p.featured, p.is_ongoing, p.start_date, p.end_date, p.created_at,
         i.id as image_id, i.title as image_title, 
         i.description as image_description, i.image_url
     FROM projects p
-    LEFT JOIN project_images i ON p.id = i.project_id AND i.primary = true
-    WHERE p.published = true
+    LEFT JOIN project_images i ON p.id = i.project_id AND i."primary" = true
+    WHERE p.public = true
     """
     
     params = []
@@ -48,7 +52,7 @@ async def get_projects(
         params.append(featured)
     
     if search:
-        query += " AND (p.title ILIKE %s OR p.description ILIKE %s)"
+        query += " AND (p.title LIKE %s OR p.description LIKE %s)"
         search_term = f"%{search}%"
         params.extend([search_term, search_term])
     
@@ -83,8 +87,11 @@ async def get_projects(
                 "title": item["title"],
                 "slug": item["slug"],
                 "description": item["description"],
-                "timeline": item["timeline"],
-                "featured": item["featured"],
+                "project_image": item["project_image"],
+                "featured": bool(item["featured"]),
+                "is_ongoing": bool(item["is_ongoing"]),
+                "start_date": item["start_date"],
+                "end_date": item["end_date"],
                 "created_at": item["created_at"],
                 "primary_image": None
             }
@@ -99,7 +106,7 @@ async def get_projects(
                     "project_id": item["id"],
                     "primary": True,
                     "order": 0,
-                    "created_at": item["created_at"]  # Use project creation date as fallback
+                    "created_at": item["created_at"]
                 }
             
             formatted_projects.append(project)
@@ -123,14 +130,12 @@ async def get_projects(
 async def get_project(slug: str):
     """Get a single project by slug."""
     # Get project
-    project_query = """
-    SELECT * FROM projects WHERE slug = %s AND published = true
-    """
+    project_query = "SELECT * FROM projects WHERE slug = %s AND public = true"
     
     project = await fetch_one(project_query, (slug,))
     
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)
     
     # Get project images
     images_query = """
@@ -142,17 +147,10 @@ async def get_project(slug: str):
     images = await fetch_all(images_query, (project["id"],))
     
     # Combine project and images
-    project["images"] = images or []
+    project_dict = dict(project)
+    project_dict["images"] = images or []
     
-    # Parse links JSON
-    if project["links"] and isinstance(project["links"], str):
-        import json
-        try:
-            project["links"] = json.loads(project["links"])
-        except:
-            project["links"] = {}
-    
-    return project
+    return project_dict
 
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 async def create_project(project: ProjectCreate):
@@ -172,29 +170,39 @@ async def create_project(project: ProjectCreate):
     # Insert the project
     query = """
     INSERT INTO projects (
-        title, slug, description, timeline, links, 
-        published, featured
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-    RETURNING id
+        title, slug, description, project_image, project_image_preview,
+        image_title, image_description, github_link, demo_link, technologies,
+        is_ongoing, start_date, end_date, featured, public
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
-    # Convert links to JSON string for PostgreSQL
+    # Convert technologies to JSON string
     import json
-    links_json = json.dumps(project.links) if project.links else "{}"
+    technologies_json = json.dumps(project.technologies) if project.technologies else "[]"
     
-    result = await fetch_one(
+    await execute_query(
         query, 
         (
             project.title, 
             project.slug, 
             project.description, 
-            project.timeline, 
-            links_json,
-            project.published, 
-            project.featured
+            project.project_image,
+            project.project_image_preview,
+            project.image_title,
+            project.image_description,
+            project.github_link,
+            project.demo_link,
+            technologies_json,
+            project.is_ongoing,
+            project.start_date,
+            project.end_date,
+            project.featured,
+            project.public
         )
     )
     
+    # Get the created project
+    result = await fetch_one("SELECT * FROM projects WHERE slug = %s", (project.slug,))
     project_id = result["id"]
     
     # Add images if provided
@@ -203,7 +211,7 @@ async def create_project(project: ProjectCreate):
             image_query = """
             INSERT INTO project_images (
                 project_id, title, description, image_url, 
-                primary, "order"
+                "primary", "order"
             ) VALUES (%s, %s, %s, %s, %s, %s)
             """
             
@@ -232,7 +240,7 @@ async def update_project(project_id: int, project_update: ProjectUpdate):
     existing = await fetch_one("SELECT slug FROM projects WHERE id = %s", (project_id,))
     
     if not existing:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)
     
     # Build the update query dynamically based on provided fields
     update_fields = []
@@ -250,26 +258,58 @@ async def update_project(project_id: int, project_update: ProjectUpdate):
         update_fields.append("description = %s")
         params.append(project_update.description)
     
-    if project_update.timeline is not None:
-        update_fields.append("timeline = %s")
-        params.append(project_update.timeline)
+    if project_update.project_image is not None:
+        update_fields.append("project_image = %s")
+        params.append(project_update.project_image)
     
-    if project_update.links is not None:
+    if project_update.project_image_preview is not None:
+        update_fields.append("project_image_preview = %s")
+        params.append(project_update.project_image_preview)
+    
+    if project_update.image_title is not None:
+        update_fields.append("image_title = %s")
+        params.append(project_update.image_title)
+    
+    if project_update.image_description is not None:
+        update_fields.append("image_description = %s")
+        params.append(project_update.image_description)
+    
+    if project_update.github_link is not None:
+        update_fields.append("github_link = %s")
+        params.append(project_update.github_link)
+    
+    if project_update.demo_link is not None:
+        update_fields.append("demo_link = %s")
+        params.append(project_update.demo_link)
+    
+    if project_update.technologies is not None:
         import json
-        update_fields.append("links = %s")
-        params.append(json.dumps(project_update.links))
+        update_fields.append("technologies = %s")
+        params.append(json.dumps(project_update.technologies))
     
-    if project_update.published is not None:
-        update_fields.append("published = %s")
-        params.append(project_update.published)
+    if project_update.is_ongoing is not None:
+        update_fields.append("is_ongoing = %s")
+        params.append(project_update.is_ongoing)
+    
+    if project_update.start_date is not None:
+        update_fields.append("start_date = %s")
+        params.append(project_update.start_date)
+    
+    if project_update.end_date is not None:
+        update_fields.append("end_date = %s")
+        params.append(project_update.end_date)
     
     if project_update.featured is not None:
         update_fields.append("featured = %s")
         params.append(project_update.featured)
     
+    if project_update.public is not None:
+        update_fields.append("public = %s")
+        params.append(project_update.public)
+    
     # Update timestamp
     update_fields.append("updated_at = %s")
-    params.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    params.append(datetime.now())
     
     # Update the project if there are fields to update
     if update_fields:
@@ -277,19 +317,14 @@ async def update_project(project_id: int, project_update: ProjectUpdate):
         UPDATE projects 
         SET {', '.join(update_fields)}
         WHERE id = %s
-        RETURNING slug
         """
         
         params.append(project_id)
-        result = await fetch_one(update_query, tuple(params))
-        
-        # Get updated slug (in case it changed)
-        slug = result["slug"] if result and "slug" in result else existing["slug"]
-    else:
-        slug = existing["slug"]
+        await execute_query(update_query, tuple(params))
     
     # Get the updated project
-    return await get_project(slug)
+    updated_project = await fetch_one("SELECT slug FROM projects WHERE id = %s", (project_id,))
+    return await get_project(updated_project["slug"])
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(project_id: int):
@@ -298,7 +333,7 @@ async def delete_project(project_id: int):
     existing = await fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,))
     
     if not existing:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)
     
     # Delete the project (images will be deleted via CASCADE)
     await execute_query("DELETE FROM projects WHERE id = %s", (project_id,))
@@ -320,13 +355,13 @@ async def add_project_image(
     project = await fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,))
     
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)
     
-    # Upload the image
-    success, message, image_url = await upload_image(
+    # Upload the image using storage directly
+    success, message, image_url = await storage.upload_file(
         file=image,
         folder=f"project-images/{project_id}",
-        filename=None  # Generate a unique filename
+        custom_filename=None  # Generate a unique filename
     )
     
     if not success:
@@ -335,34 +370,29 @@ async def add_project_image(
     # If this is primary, update other images to not be primary
     if primary:
         await execute_query(
-            "UPDATE project_images SET primary = false WHERE project_id = %s",
+            "UPDATE project_images SET \"primary\" = false WHERE project_id = %s",
             (project_id,)
         )
     
     # Add the image to the project
     query = """
     INSERT INTO project_images (
-        project_id, title, description, image_url, primary, "order"
+        project_id, title, description, image_url, "primary", "order"
     ) VALUES (%s, %s, %s, %s, %s, %s)
-    RETURNING id, created_at
     """
     
-    result = await fetch_one(
+    await execute_query(
         query,
         (project_id, title, description, image_url, primary, order)
     )
     
-    # Return the newly created image
-    return {
-        "id": result["id"],
-        "project_id": project_id,
-        "title": title,
-        "description": description,
-        "image_url": image_url,
-        "primary": primary,
-        "order": order,
-        "created_at": result["created_at"]
-    }
+    # Get the newly created image
+    result = await fetch_one(
+        "SELECT * FROM project_images WHERE project_id = %s AND image_url = %s", 
+        (project_id, image_url)
+    )
+    
+    return result
 
 @router.put("/images/{image_id}", response_model=ProjectImageResponse)
 async def update_project_image(image_id: int, image_update: ProjectImageUpdate):
@@ -371,7 +401,7 @@ async def update_project_image(image_id: int, image_update: ProjectImageUpdate):
     existing = await fetch_one("SELECT * FROM project_images WHERE id = %s", (image_id,))
     
     if not existing:
-        raise HTTPException(status_code=404, detail="Image not found")
+        raise HTTPException(status_code=404, detail=IMAGE_NOT_FOUND)
     
     # Build the update query dynamically based on provided fields
     update_fields = []
@@ -390,18 +420,18 @@ async def update_project_image(image_id: int, image_update: ProjectImageUpdate):
         params.append(image_update.image_url)
     
     if image_update.primary is not None:
-        update_fields.append("primary = %s")
+        update_fields.append("\"primary\" = %s")
         params.append(image_update.primary)
         
         # If setting as primary, update other images to not be primary
         if image_update.primary:
             await execute_query(
-                "UPDATE project_images SET primary = false WHERE project_id = %s AND id != %s",
+                "UPDATE project_images SET \"primary\" = false WHERE project_id = %s AND id != %s",
                 (existing["project_id"], image_id)
             )
     
     if image_update.order is not None:
-        update_fields.append('"order" = %s')
+        update_fields.append("\"order\" = %s")
         params.append(image_update.order)
     
     # Update the image if there are fields to update
@@ -426,11 +456,17 @@ async def delete_project_image(image_id: int):
     existing = await fetch_one("SELECT id, image_url FROM project_images WHERE id = %s", (image_id,))
     
     if not existing:
-        raise HTTPException(status_code=404, detail="Image not found")
+        raise HTTPException(status_code=404, detail=IMAGE_NOT_FOUND)
     
     # Delete the image
     await execute_query("DELETE FROM project_images WHERE id = %s", (image_id,))
     
-    # TODO: Delete the actual image file from storage (optional)
+    # Clean up the actual image file from storage
+    try:
+        if existing["image_url"]:
+            await storage.delete_file(existing["image_url"])
+    except Exception as e:
+        # Log the error but don't fail the request
+        print(f"Warning: Could not delete image file {existing['image_url']}: {e}")
     
     return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)

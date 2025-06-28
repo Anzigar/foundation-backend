@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, HttpUrl
+from typing import List, Optional
+from pydantic import BaseModel
 
 # Project Image Schemas
 class ProjectImageBase(BaseModel):
@@ -25,40 +25,57 @@ class ProjectImageResponse(ProjectImageBase):
     project_id: int
     created_at: datetime
 
-# Project Schemas
-class ProjectBase(BaseModel):
+class ProjectCreate(BaseModel):
     title: str
+    slug: Optional[str] = None
     description: str
-    timeline: Optional[str] = None
-    links: Optional[Dict[str, str]] = Field(default_factory=dict)
-    published: bool = False
+    project_image: Optional[str] = None
+    project_image_preview: Optional[str] = None
+    image_title: Optional[str] = None
+    image_description: Optional[str] = None
+    github_link: Optional[str] = None
+    demo_link: Optional[str] = None
+    technologies: List[str] = []
+    is_ongoing: bool = True
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     featured: bool = False
-
-class ProjectCreate(ProjectBase):
-    slug: Optional[str] = None  # Will be generated if not provided
-    images: Optional[List[ProjectImageCreate]] = None
+    public: bool = True
+    images: Optional[List[ProjectImageCreate]] = []
 
 class ProjectUpdate(BaseModel):
     title: Optional[str] = None
+    slug: Optional[str] = None
     description: Optional[str] = None
-    timeline: Optional[str] = None
-    links: Optional[Dict[str, str]] = None
-    published: Optional[bool] = None
+    project_image: Optional[str] = None
+    project_image_preview: Optional[str] = None
+    image_title: Optional[str] = None
+    image_description: Optional[str] = None
+    github_link: Optional[str] = None
+    demo_link: Optional[str] = None
+    technologies: Optional[List[str]] = None
+    is_ongoing: Optional[bool] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     featured: Optional[bool] = None
+    public: Optional[bool] = None
+
+class ProjectResponse(ProjectCreate):
+    id: int
+    slug: str
+    created_at: datetime
+    updated_at: datetime
+    images: List[ProjectImageResponse] = []
 
 class ProjectListItem(BaseModel):
     id: int
     title: str
     slug: str
     description: str
-    timeline: Optional[str] = None
+    project_image: Optional[str] = None
     featured: bool
+    is_ongoing: bool
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
     created_at: datetime
     primary_image: Optional[ProjectImageResponse] = None
-
-class ProjectResponse(ProjectBase):
-    id: int
-    slug: str
-    created_at: datetime
-    updated_at: datetime
-    images: List[ProjectImageResponse] = []
