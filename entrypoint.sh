@@ -3,8 +3,8 @@
 set -e
 
 # Wait for database to be ready
-echo "Waiting for MySQL database to be ready..."
-while ! mysqladmin ping -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASSWORD" --silent; do
+echo "Waiting for PostgreSQL database to be ready..."
+while ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -q; do
     echo "Database not ready yet, waiting..."
     sleep 2
 done
