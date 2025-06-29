@@ -24,7 +24,7 @@ certificatesResolvers:
   letsencrypt:
     acme:
       email: jastinlasway10@gmail.com
-      storage: /acme.json
+      storage: acme.json
       httpChallenge:
         entryPoint: web
 
