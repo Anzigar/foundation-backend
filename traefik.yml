@@ -1,9 +1,9 @@
 entryPoints:
   web:
-    address: :80
+    address: ":80"
 
   websecure:
-    address: :443
+    address: ":443"
 
 providers:
   docker:
@@ -20,12 +20,12 @@ certificatesResolvers:
     acme:
       email: jastinlasway10@gmail.com
       storage: acme.json
-      # Use staging server first to avoid rate limits
-      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
-      httpChallenge:
-        entryPoint: web
+      caServer: https://acme-v02.api.letsencrypt.org/directory # Switch to production for real certs
+      tlsChallenge: {}
+      # httpChallenge is commented out because TLS challenge is preferred for containerized apps
+      # httpChallenge:
+      #   entryPoint: web
 
-# Global redirect to HTTPS
 http:
   middlewares:
     redirect-to-https:
