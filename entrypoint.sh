@@ -12,9 +12,9 @@ done
 
 # Set DATABASE_URL from environment variables (handling both with and without password)
 if [ -n "${POSTGRES_PASSWORD}" ]; then
-    export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    export DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 else
-    export DATABASE_URL="postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    export DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 fi
 
 # Debug environment variables (without sensitive data)
@@ -24,9 +24,9 @@ echo "POSTGRES_PORT: ${POSTGRES_PORT}"
 echo "POSTGRES_USER: ${POSTGRES_USER}"
 echo "POSTGRES_DB: ${POSTGRES_DB}"
 if [ -n "${POSTGRES_PASSWORD}" ]; then
-    echo "DATABASE_URL: postgresql://${POSTGRES_USER}:***@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    echo "DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:***@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 else
-    echo "DATABASE_URL: postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    echo "DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 fi
 
 # Wait for database to be ready
@@ -86,12 +86,22 @@ wait_for_db
 
 echo "Running database migrations..."
 if command -v alembic >/dev/null 2>&1; then
-    export SQLALCHEMY_DATABASE_URL="${DATABASE_URL}"
+    # Set synchronous DATABASE_URL for Alembic migrations
+    if [ -n "${POSTGRES_PASSWORD}" ]; then
+        export SQLALCHEMY_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    else
+        export SQLALCHEMY_DATABASE_URL="postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    fi
     alembic upgrade head
 else
     echo "Alembic command not available, checking if it's installed as a package..."
     if pip list | grep -q alembic; then
-        export SQLALCHEMY_DATABASE_URL="${DATABASE_URL}"
+        # Set synchronous DATABASE_URL for Alembic migrations
+        if [ -n "${POSTGRES_PASSWORD}" ]; then
+            export SQLALCHEMY_DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+        else
+            export SQLALCHEMY_DATABASE_URL="postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+        fi
         python -c "import alembic.config; alembic.config.main(argv=['upgrade', 'head'])" || \
         echo "Migration failed but continuing startup"
     else
