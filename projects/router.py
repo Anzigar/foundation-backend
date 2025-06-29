@@ -180,6 +180,10 @@ async def create_project(project: ProjectCreate):
     import json
     technologies_json = json.dumps(project.technologies) if project.technologies else "[]"
     
+    # Convert timezone-aware datetimes to timezone-naive for database compatibility
+    start_date_naive = project.start_date.replace(tzinfo=None) if project.start_date else None
+    end_date_naive = project.end_date.replace(tzinfo=None) if project.end_date else None
+    
     await execute_query(
         query, 
         (
@@ -194,8 +198,8 @@ async def create_project(project: ProjectCreate):
             project.demo_link,
             technologies_json,
             project.is_ongoing,
-            project.start_date,
-            project.end_date,
+            start_date_naive,
+            end_date_naive,
             project.featured,
             project.public
         )
@@ -293,11 +297,15 @@ async def update_project(project_id: int, project_update: ProjectUpdate):
     
     if project_update.start_date is not None:
         update_fields.append("start_date = %s")
-        params.append(project_update.start_date)
+        # Convert timezone-aware datetime to timezone-naive for database compatibility
+        start_date_naive = project_update.start_date.replace(tzinfo=None) if project_update.start_date.tzinfo else project_update.start_date
+        params.append(start_date_naive)
     
     if project_update.end_date is not None:
         update_fields.append("end_date = %s")
-        params.append(project_update.end_date)
+        # Convert timezone-aware datetime to timezone-naive for database compatibility
+        end_date_naive = project_update.end_date.replace(tzinfo=None) if project_update.end_date.tzinfo else project_update.end_date
+        params.append(end_date_naive)
     
     if project_update.featured is not None:
         update_fields.append("featured = %s")

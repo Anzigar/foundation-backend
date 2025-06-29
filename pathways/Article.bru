@@ -4,8 +4,25 @@ meta {
   seq: 1
 }
 
-post {
-  url: http://127.0.0.1:8000/api/events/
-  body: none
+get {
+  url: http://127.0.0.1:8000/api/blog/
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "title": "5 Essential Tips for Choosing the Right Smartphone in 2025",
+    "content": "Choosing the right smartphone in 2025 can be overwhelming with so many options available. In this article, we'll break down key things to consider like performance, battery life, camera quality, software experience, and ecosystem compatibility.",
+    "excerpt": "Learn the top 5 things to consider before buying your next smartphone in 2025.",
+    "image_url": "https://example.com/images/smartphone-buying-guide-2025.jpg",
+    "author_name": "Admin",
+    "tags": ["smartphones", "tech tips", "buying guide"],
+    "is_published": true,
+    "featured": true,
+    "seo_title": "Top 5 Tips for Buying a Smartphone in 2025",
+    "meta_description": "Explore 5 key tips that will help you choose the perfect smartphone in 2025, whether you're a casual user or a tech enthusiast.",
+    "slug": "smartphone-buying-guide-2025"
+  }
+  
 }

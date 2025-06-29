@@ -133,6 +133,9 @@ async def create_event(event: EventCreate):
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
+    # Convert timezone-aware datetime to timezone-naive for database compatibility
+    event_date_naive = event.event_date.replace(tzinfo=None) if event.event_date and event.event_date.tzinfo else event.event_date
+    
     await execute_query(
         query, 
         (
@@ -141,7 +144,7 @@ async def create_event(event: EventCreate):
             event.content,
             event.excerpt, 
             event.location, 
-            event.event_date,
+            event_date_naive,
             event.image_url, 
             event.author_name,
             event.is_published, 

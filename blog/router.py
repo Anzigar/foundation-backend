@@ -218,22 +218,55 @@ async def get_blog_post_by_id(post_id: int):
     if not blog_post:
         raise HTTPException(status_code=404, detail="Blog post not found")
     
-    return blog_post
+    # Format the result to match the response schema  
+    formatted_result = {
+        "id": blog_post["id"],
+        "title": blog_post["title"],
+        "slug": blog_post["slug"],
+        "content": blog_post["content"],
+        "excerpt": blog_post["excerpt"],
+        "image_url": blog_post["image_url"],
+        "author_name": blog_post["author_name"],
+        "tags": blog_post["tags"].split(",") if blog_post["tags"] else [],
+        "created_at": blog_post["created_at"],
+        "updated_at": blog_post["updated_at"],
+        "is_published": blog_post["is_published"],
+        "featured": blog_post["featured"],
+        "seo_title": blog_post["seo_title"],
+        "meta_description": blog_post["meta_description"]
+    }
+    
+    return formatted_result
 
 @router.post("/", response_model=BlogPostResponse, status_code=status.HTTP_201_CREATED)
 async def create_blog_post(post: BlogPostCreate):
     """Create a new blog post."""
+    # Add logging to debug frontend issues
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Creating blog post: title='{post.title}', slug='{post.slug}', is_published={post.is_published}")
+    
     # Generate slug if not provided
     if not post.slug:
         post.slug = generate_slug(post.title)
     
-    # Check for slug uniqueness
-    existing = await fetch_one("SELECT id FROM blog_posts WHERE slug = %s", (post.slug,))
-    if existing:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Blog post with slug '{post.slug}' already exists"
-        )
+    # Handle slug uniqueness by auto-generating unique slug if needed
+    original_slug = post.slug
+    counter = 1
+    while True:
+        existing = await fetch_one("SELECT id FROM blog_posts WHERE slug = %s", (post.slug,))
+        if not existing:
+            break
+        # If slug exists, append counter
+        post.slug = f"{original_slug}-{counter}"
+        counter += 1
+        
+        # Prevent infinite loop - max 100 attempts
+        if counter > 100:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Unable to generate unique slug for '{original_slug}' after 100 attempts"
+            )
     
     # Insert the blog post
     query = """
@@ -260,7 +293,26 @@ async def create_blog_post(post: BlogPostCreate):
 
     # Get the newly created post
     result = await fetch_one("SELECT * FROM blog_posts WHERE slug = %s", (post.slug,))
-    return result
+    
+    # Format the result to match the response schema
+    formatted_result = {
+        "id": result["id"],
+        "title": result["title"],
+        "slug": result["slug"],
+        "content": result["content"],
+        "excerpt": result["excerpt"],
+        "image_url": result["image_url"],
+        "author_name": result["author_name"],
+        "tags": result["tags"].split(",") if result["tags"] else [],
+        "created_at": result["created_at"],
+        "updated_at": result["updated_at"],
+        "is_published": result["is_published"],
+        "featured": result["featured"],
+        "seo_title": result["seo_title"],
+        "meta_description": result["meta_description"]
+    }
+    
+    return formatted_result
 
 @router.get("/draft/{slug}", response_model=BlogPostResponse)
 async def get_blog_post_draft(slug: str):
@@ -278,7 +330,25 @@ async def get_blog_post_draft(slug: str):
     if not blog_post:
         raise HTTPException(status_code=404, detail=f"Blog post with slug '{slug}' not found")
     
-    return blog_post
+    # Format the result to match the response schema
+    formatted_result = {
+        "id": blog_post["id"],
+        "title": blog_post["title"],
+        "slug": blog_post["slug"],
+        "content": blog_post["content"],
+        "excerpt": blog_post["excerpt"],
+        "image_url": blog_post["image_url"],
+        "author_name": blog_post["author_name"],
+        "tags": blog_post["tags"].split(",") if blog_post["tags"] else [],
+        "created_at": blog_post["created_at"],
+        "updated_at": blog_post["updated_at"],
+        "is_published": blog_post["is_published"],
+        "featured": blog_post["featured"],
+        "seo_title": blog_post["seo_title"],
+        "meta_description": blog_post["meta_description"]
+    }
+    
+    return formatted_result
 
 @router.post("/draft", response_model=BlogPostResponse, status_code=status.HTTP_201_CREATED)
 async def create_blog_post_draft(post: BlogPostCreate):
@@ -323,4 +393,46 @@ async def create_blog_post_draft(post: BlogPostCreate):
     
     # Get the newly created draft
     result = await fetch_one("SELECT * FROM blog_posts WHERE slug = %s", (post.slug,))
-    return result
+    
+    # Format the result to match the response schema
+    formatted_result = {
+        "id": result["id"],
+        "title": result["title"],
+        "slug": result["slug"],
+        "content": result["content"],
+        "excerpt": result["excerpt"],
+        "image_url": result["image_url"],
+        "author_name": result["author_name"],
+        "tags": result["tags"].split(",") if result["tags"] else [],
+        "created_at": result["created_at"],
+        "updated_at": result["updated_at"],
+        "is_published": result["is_published"],
+        "featured": result["featured"],
+        "seo_title": result["seo_title"],
+        "meta_description": result["meta_description"]
+    }
+    
+    return formatted_result
+
+@router.post("/sync-offline", response_model=BlogPostResponse, status_code=status.HTTP_201_CREATED)
+async def sync_offline_blog_post(post: BlogPostCreate):
+    """Sync an offline blog post to the server."""
+    import logging
+    import time
+    logger = logging.getLogger(__name__)
+    
+    # Handle offline blog posts specifically
+    if post.slug and post.slug.startswith('offlineBlog_'):
+        # Generate a new proper slug from the title
+        new_slug = generate_slug(post.title) if post.title else f"blog-post-{int(time.time())}"
+        logger.info(f"Converting offline blog '{post.slug}' to proper slug '{new_slug}'")
+        post.slug = new_slug
+    
+    # Use the same logic as create_blog_post but with offline handling
+    return await create_blog_post(post)
+
+@router.get("/debug-slugs")
+async def debug_existing_slugs():
+    """Debug endpoint to see what slugs exist in the database."""
+    slugs = await fetch_all("SELECT slug, title, is_published FROM blog_posts ORDER BY created_at DESC")
+    return {"existing_slugs": slugs}
