@@ -13,7 +13,6 @@ try:
         host=os.getenv('POSTGRES_HOST'),
         port=os.getenv('POSTGRES_PORT'),
         user=os.getenv('POSTGRES_USER'),
-        password=os.getenv('POSTGRES_PASSWORD'),
         database=os.getenv('POSTGRES_DB')
     )
     conn.close()
@@ -36,7 +35,17 @@ echo "Running database migrations..."
 
 # Create database tables if they don't exist
 echo "Ensuring database tables exist..."
-python -c "from shared.database import Base, engine; Base.metadata.create_all(bind=engine)"
+python -c "
+import os
+from sqlalchemy import create_engine
+from shared.database import Base
+
+# Create synchronous engine for table creation
+sync_db_url = f'postgresql://{{os.getenv(\"POSTGRES_USER\")}}@{{os.getenv(\"POSTGRES_HOST\")}}:{{os.getenv(\"POSTGRES_PORT\")}}/{{os.getenv(\"POSTGRES_DB\")}}'
+sync_engine = create_engine(sync_db_url)
+Base.metadata.create_all(bind=sync_engine)
+print('Database tables created successfully!')
+"
 
 # Execute the command passed to docker
 exec "$@"
