@@ -54,8 +54,11 @@ class Settings(BaseSettings):
     @model_validator(mode='after')
     def construct_database_url(self):
         """Construct DATABASE_URL if not provided."""
-        # Force PostgreSQL for development
-        self.DATABASE_URL = f"postgresql+asyncpg://{self.POSTGRES_USER}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        if not self.DATABASE_URL:
+            if self.POSTGRES_PASSWORD:
+                self.DATABASE_URL = f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            else:
+                self.DATABASE_URL = f"postgresql+asyncpg://{self.POSTGRES_USER}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         return self
 
 @lru_cache()

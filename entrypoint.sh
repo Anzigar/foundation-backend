@@ -9,12 +9,23 @@ import psycopg2
 import os
 import sys
 try:
-    conn = psycopg2.connect(
-        host=os.getenv('POSTGRES_HOST'),
-        port=os.getenv('POSTGRES_PORT'),
-        user=os.getenv('POSTGRES_USER'),
-        database=os.getenv('POSTGRES_DB')
-    )
+    # Try with password first (production), then without (local)
+    password = os.getenv('POSTGRES_PASSWORD')
+    if password:
+        conn = psycopg2.connect(
+            host=os.getenv('POSTGRES_HOST', 'database'),
+            port=os.getenv('POSTGRES_PORT', '5432'),
+            user=os.getenv('POSTGRES_USER'),
+            password=password,
+            database=os.getenv('POSTGRES_DB')
+        )
+    else:
+        conn = psycopg2.connect(
+            host=os.getenv('POSTGRES_HOST', 'database'),
+            port=os.getenv('POSTGRES_PORT', '5432'),
+            user=os.getenv('POSTGRES_USER'),
+            database=os.getenv('POSTGRES_DB')
+        )
     conn.close()
     print('Database connection successful!')
     sys.exit(0)
@@ -41,7 +52,11 @@ from sqlalchemy import create_engine
 from shared.database import Base
 
 # Create synchronous engine for table creation
-sync_db_url = f'postgresql://{{os.getenv(\"POSTGRES_USER\")}}@{{os.getenv(\"POSTGRES_HOST\")}}:{{os.getenv(\"POSTGRES_PORT\")}}/{{os.getenv(\"POSTGRES_DB\")}}'
+password = os.getenv('POSTGRES_PASSWORD')
+if password:
+    sync_db_url = f'postgresql://{os.getenv(\"POSTGRES_USER\")}:{password}@{os.getenv(\"POSTGRES_HOST\")}:{os.getenv(\"POSTGRES_PORT\")}/{os.getenv(\"POSTGRES_DB\")}'
+else:
+    sync_db_url = f'postgresql://{os.getenv(\"POSTGRES_USER\")}@{os.getenv(\"POSTGRES_HOST\")}:{os.getenv(\"POSTGRES_PORT\")}/{os.getenv(\"POSTGRES_DB\")}'
 sync_engine = create_engine(sync_db_url)
 Base.metadata.create_all(bind=sync_engine)
 print('Database tables created successfully!')
