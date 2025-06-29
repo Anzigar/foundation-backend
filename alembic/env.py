@@ -25,8 +25,10 @@ if config.config_file_name is not None:
 # Import all models to ensure they're registered with Base
 from blog.models import *
 from news.models import *
+from events.models import *
 from projects.models import *
 from contacts.models import *
+from shared.models import *
 from shared.media_models import *
 from shared.database import Base
 

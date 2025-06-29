@@ -41,6 +41,7 @@ Jinja2  # For templating
 pytest
 pytest-asyncio
 httpx
+aiohttp  # For HTTP client in verification scripts
 
 # Development tools
 black

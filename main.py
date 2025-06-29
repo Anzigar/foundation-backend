@@ -19,12 +19,64 @@ from projects.router import router as projects_router
 from shared.database import get_db, create_tables
 
 # Create a simple health check router
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from sqlalchemy import text
+from datetime import datetime
+import os
+
 health_router = APIRouter()
 
 @health_router.get("/health")
 async def health():
-    return {"status": "healthy"}
+    """Comprehensive health check endpoint."""
+    try:
+        # Test database connection
+        from shared.database import async_session
+        
+        db_status = "healthy"
+        db_error = None
+        
+        try:
+            async with async_session() as session:
+                result = await session.execute(text("SELECT 1"))
+                if not result.fetchone():
+                    db_status = "unhealthy"
+                    db_error = "Database query returned no result"
+        except Exception as e:
+            db_status = "unhealthy"
+            db_error = str(e)
+        
+        health_data = {
+            "status": "healthy" if db_status == "healthy" else "degraded",
+            "timestamp": datetime.now().isoformat(),
+            "version": "1.0.0",
+            "environment": os.getenv("ENVIRONMENT", "development"),
+            "services": {
+                "api": "healthy",
+                "database": db_status
+            }
+        }
+        
+        if db_error:
+            health_data["errors"] = {"database": db_error}
+            
+        # Return 503 if any service is unhealthy
+        if db_status == "unhealthy":
+            raise HTTPException(status_code=503, detail=health_data)
+            
+        return health_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=503, 
+            detail={
+                "status": "unhealthy",
+                "timestamp": datetime.now().isoformat(),
+                "error": str(e)
+            }
+        )
 
 @health_router.get("/")
 async def api_root():

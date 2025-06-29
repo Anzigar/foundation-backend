@@ -110,23 +110,12 @@ else
     fi
 fi
 
-# Create database tables if they don't exist (fallback)
-echo "Ensuring database tables exist..."
-python -c "
-import os
-from sqlalchemy import create_engine
-from shared.database import Base
-
-# Create synchronous engine for table creation
-if os.getenv('POSTGRES_PASSWORD'):
-    sync_db_url = f'postgresql://{os.getenv(\"POSTGRES_USER\")}:{os.getenv(\"POSTGRES_PASSWORD\")}@{os.getenv(\"POSTGRES_HOST\")}:{os.getenv(\"POSTGRES_PORT\")}/{os.getenv(\"POSTGRES_DB\")}'
-else:
-    sync_db_url = f'postgresql://{os.getenv(\"POSTGRES_USER\")}@{os.getenv(\"POSTGRES_HOST\")}:{os.getenv(\"POSTGRES_PORT\")}/{os.getenv(\"POSTGRES_DB\")}'
-
-sync_engine = create_engine(sync_db_url)
-Base.metadata.create_all(bind=sync_engine)
-print('Database tables created successfully!')
-"
+echo "Running comprehensive database setup..."
+if python setup_database.py; then
+    echo "Database setup completed successfully!"
+else
+    echo "Database setup failed, but continuing startup..."
+fi
 
 echo "Starting the application..."
 echo "Using port: ${PORT:-8000}"
