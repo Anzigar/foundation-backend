@@ -34,8 +34,6 @@ services:
       - database
     networks:
       - proxy
-    environment:
-      - DB_HOST=database  
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
@@ -57,7 +55,7 @@ services:
       - "5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_HOST_AUTH_METHOD=trust  # Allow connections without password
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - ./database:/var/lib/postgresql/data
