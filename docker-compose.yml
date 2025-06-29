@@ -40,8 +40,14 @@ services:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
       - "traefik.http.routers.foundation-api.rule=Host(`backend.pathwaysfoundationforthepoor.org`)"
-      - "traefik.http.routers.foundation-api.entrypoints=web"
+      - "traefik.http.routers.foundation-api.entrypoints=websecure"
+      - "traefik.http.routers.foundation-api.tls=true"
+      - "traefik.http.routers.foundation-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.foundation-api.loadbalancer.server.port=8000"
+      # HTTP to HTTPS redirect
+      - "traefik.http.routers.foundation-api-http.rule=Host(`backend.pathwaysfoundationforthepoor.org`)"
+      - "traefik.http.routers.foundation-api-http.entrypoints=web"
+      - "traefik.http.routers.foundation-api-http.middlewares=redirect-to-https"
       
 
   database:
