@@ -1,7 +1,7 @@
 services:
   traefik:
     image: traefik:2.8
-    container_name: traefik
+    container_name: payment_traefik
     restart: unless-stopped
     networks:
       - proxy
