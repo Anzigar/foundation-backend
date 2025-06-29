@@ -20,11 +20,10 @@ certificatesResolvers:
     acme:
       email: jastinlasway10@gmail.com
       storage: acme.json
-      caServer: https://acme-v02.api.letsencrypt.org/directory # Switch to production for real certs
-      tlsChallenge: {}
-      # httpChallenge is commented out because TLS challenge is preferred for containerized apps
-      # httpChallenge:
-      #   entryPoint: web
+      # Use staging server first to debug the issue
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      httpChallenge:
+        entryPoint: web
 
 http:
   middlewares:
