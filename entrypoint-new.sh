@@ -10,11 +10,13 @@ for var in "${required_vars[@]}"; do
     fi
 done
 
-# Set DATABASE_URL from environment variables (handling both with and without password)
-if [ -n "${POSTGRES_PASSWORD}" ]; then
-    export DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
-else
-    export DATABASE_URL="postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+# Set DATABASE_URL from environment variables if not already set
+if [ -z "$DATABASE_URL" ]; then
+    if [ -n "$POSTGRES_PASSWORD" ]; then
+        export DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    else
+        export DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    fi
 fi
 
 # Debug environment variables (without sensitive data)
@@ -23,10 +25,10 @@ echo "POSTGRES_HOST: ${POSTGRES_HOST}"
 echo "POSTGRES_PORT: ${POSTGRES_PORT}"
 echo "POSTGRES_USER: ${POSTGRES_USER}"
 echo "POSTGRES_DB: ${POSTGRES_DB}"
-if [ -n "${POSTGRES_PASSWORD}" ]; then
-    echo "DATABASE_URL: postgresql://${POSTGRES_USER}:***@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+if [ -n "$POSTGRES_PASSWORD" ]; then
+    echo "DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:***@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 else
-    echo "DATABASE_URL: postgresql://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
+    echo "DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
 fi
 
 # Wait for database to be ready
@@ -40,21 +42,16 @@ wait_for_db() {
 import psycopg2
 import os
 try:
+    conn_params = {
+        'host': os.getenv('POSTGRES_HOST'),
+        'port': int(os.getenv('POSTGRES_PORT')),
+        'user': os.getenv('POSTGRES_USER'),
+        'database': os.getenv('POSTGRES_DB')
+    }
     if os.getenv('POSTGRES_PASSWORD'):
-        conn = psycopg2.connect(
-            host=os.getenv('POSTGRES_HOST'),
-            port=int(os.getenv('POSTGRES_PORT')),
-            user=os.getenv('POSTGRES_USER'),
-            password=os.getenv('POSTGRES_PASSWORD'),
-            database=os.getenv('POSTGRES_DB')
-        )
-    else:
-        conn = psycopg2.connect(
-            host=os.getenv('POSTGRES_HOST'),
-            port=int(os.getenv('POSTGRES_PORT')),
-            user=os.getenv('POSTGRES_USER'),
-            database=os.getenv('POSTGRES_DB')
-        )
+        conn_params['password'] = os.getenv('POSTGRES_PASSWORD')
+    
+    conn = psycopg2.connect(**conn_params)
     conn.close()
     print('Database is ready!')
     exit(0)
@@ -86,23 +83,15 @@ wait_for_db
 
 echo "Running database migrations..."
 if command -v alembic >/dev/null 2>&1; then
-    export SQLALCHEMY_DATABASE_URL="${DATABASE_URL}"
-    alembic upgrade head
+    alembic upgrade head || echo "Migration failed but continuing startup"
 else
     echo "Alembic command not available, checking if it's installed as a package..."
     if pip list | grep -q alembic; then
-        export SQLALCHEMY_DATABASE_URL="${DATABASE_URL}"
         python -c "import alembic.config; alembic.config.main(argv=['upgrade', 'head'])" || \
         echo "Migration failed but continuing startup"
     else
-        echo "Alembic package not found. Please add it to your requirements.txt"
-        echo "Continuing without running migrations"
-    fi
-fi
-
-# Create database tables if they don't exist (fallback)
-echo "Ensuring database tables exist..."
-python -c "
+        echo "Alembic package not found. Creating tables manually..."
+        python -c "
 import os
 from sqlalchemy import create_engine
 from shared.database import Base
@@ -117,9 +106,8 @@ sync_engine = create_engine(sync_db_url)
 Base.metadata.create_all(bind=sync_engine)
 print('Database tables created successfully!')
 "
+    fi
+fi
 
 echo "Starting the application..."
-echo "Using port: ${PORT:-8000}"
-
-# Execute the command passed to docker
 exec "$@"

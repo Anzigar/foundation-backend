@@ -28,3 +28,6 @@ EXPOSE 8000
 
 # Set entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]
+
+# Default command
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
