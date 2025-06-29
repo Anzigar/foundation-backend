@@ -20,8 +20,7 @@ certificatesResolvers:
     acme:
       email: jastinlasway10@gmail.com
       storage: acme.json
-      httpChallenge:
-        entryPoint: web
+      tlsChallenge: {}
 
 http:
   middlewares:

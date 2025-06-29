@@ -44,7 +44,7 @@ services:
       - "traefik.http.routers.foundation-api.tls=true"
       - "traefik.http.routers.foundation-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.foundation-api.loadbalancer.server.port=8000"
-      # HTTP to HTTPS redirect
+      # HTTP to HTTPS redirect (add back after HTTPS works)
       - "traefik.http.routers.foundation-api-http.rule=Host(`backend.pathwaysfoundationforthepoor.org`)"
       - "traefik.http.routers.foundation-api-http.entrypoints=web"
       - "traefik.http.routers.foundation-api-http.middlewares=redirect-to-https"
