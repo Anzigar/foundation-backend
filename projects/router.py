@@ -40,7 +40,7 @@ async def get_projects(
         i.id as image_id, i.title as image_title, 
         i.description as image_description, i.image_url
     FROM projects p
-    LEFT JOIN project_images i ON p.id = i.project_id AND i."primary" = true
+    LEFT JOIN project_images i ON p.id = i.project_id AND i.primary_image = true
     WHERE p.public = true
     """
     
@@ -215,7 +215,7 @@ async def create_project(project: ProjectCreate):
             image_query = """
             INSERT INTO project_images (
                 project_id, title, description, image_url, 
-                "primary", "order"
+                primary_image, "order"
             ) VALUES (%s, %s, %s, %s, %s, %s)
             """
             
@@ -378,14 +378,14 @@ async def add_project_image(
     # If this is primary, update other images to not be primary
     if primary:
         await execute_query(
-            "UPDATE project_images SET \"primary\" = false WHERE project_id = %s",
+            "UPDATE project_images SET primary_image = false WHERE project_id = %s",
             (project_id,)
         )
     
     # Add the image to the project
     query = """
     INSERT INTO project_images (
-        project_id, title, description, image_url, "primary", "order"
+        project_id, title, description, image_url, primary_image, "order"
     ) VALUES (%s, %s, %s, %s, %s, %s)
     """
     
@@ -428,13 +428,13 @@ async def update_project_image(image_id: int, image_update: ProjectImageUpdate):
         params.append(image_update.image_url)
     
     if image_update.primary is not None:
-        update_fields.append("\"primary\" = %s")
+        update_fields.append("primary_image = %s")
         params.append(image_update.primary)
         
         # If setting as primary, update other images to not be primary
         if image_update.primary:
             await execute_query(
-                "UPDATE project_images SET \"primary\" = false WHERE project_id = %s AND id != %s",
+                "UPDATE project_images SET primary_image = false WHERE project_id = %s AND id != %s",
                 (existing["project_id"], image_id)
             )
     
