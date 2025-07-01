@@ -33,17 +33,17 @@ async def get_events(
     # Base query with field projection
     query = """
     SELECT 
-        id, title, slug, excerpt, location, event_date,
-        image_url, author_name, is_published, featured
+        id, title, slug, excerpt, location, start_date,
+        image_url, published, featured
     FROM events
-    WHERE is_published = true
+    WHERE published = true
     """
     
     params = []
     
     # Apply filters
     if upcoming:
-        query += " AND event_date >= %s"
+        query += " AND start_date >= %s"
         params.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     
     if featured is not None:
@@ -129,25 +129,26 @@ async def create_event(event: EventCreate):
     # Insert the event
     query = """
     INSERT INTO events 
-    (title, slug, content, excerpt, location, event_date, image_url, author_name, is_published, featured)
+    (title, slug, description, excerpt, location, start_date, end_date, image_url, published, featured)
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
     # Convert timezone-aware datetime to timezone-naive for database compatibility
-    event_date_naive = event.event_date.replace(tzinfo=None) if event.event_date and event.event_date.tzinfo else event.event_date
+    start_date_naive = event.start_date.replace(tzinfo=None) if event.start_date and event.start_date.tzinfo else event.start_date
+    end_date_naive = event.end_date.replace(tzinfo=None) if event.end_date and event.end_date.tzinfo else event.end_date
     
     await execute_query(
         query, 
         (
             event.title, 
             event.slug, 
-            event.content,
+            event.description,
             event.excerpt, 
             event.location, 
-            event_date_naive,
+            start_date_naive,
+            end_date_naive,
             event.image_url, 
-            event.author_name,
-            event.is_published, 
+            event.published, 
             event.featured
         )
     )
