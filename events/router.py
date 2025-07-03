@@ -51,7 +51,7 @@ async def get_events(
         params.append(featured)
     
     if search:
-        query += " AND (title ILIKE %s OR content ILIKE %s)"
+        query += " AND (title ILIKE %s OR description ILIKE %s)"
         search_term = f"%{search}%"
         params.extend([search_term, search_term])
     
@@ -94,7 +94,7 @@ async def get_event_by_id(event_id: int):
     """Get a single event by ID using raw SQL."""
     query = """
     SELECT * FROM events
-    WHERE id = %s AND is_published = true
+    WHERE id = %s AND published = true
     """
     
     event = await fetch_one(query, (event_id,))
@@ -109,7 +109,7 @@ async def get_event(slug: str):
     """Get a single event by slug using raw SQL."""
     query = """
     SELECT * FROM events
-    WHERE slug = %s AND is_published = true
+    WHERE slug = %s AND published = true
     """
     
     event = await fetch_one(query, (slug,))
@@ -178,7 +178,7 @@ async def update_event(event_id: int, event_update: EventUpdate):
         params.append(slug)
     
     if event_update.description is not None:
-        update_fields.append("content = %s")
+        update_fields.append("description = %s")
         params.append(event_update.description)
     
     if event_update.location is not None:
@@ -190,7 +190,7 @@ async def update_event(event_id: int, event_update: EventUpdate):
         params.append(event_update.image_url)
     
     if event_update.published is not None:
-        update_fields.append("is_published = %s")
+        update_fields.append("published = %s")
         params.append(event_update.published)
     
     if event_update.featured is not None:
@@ -234,7 +234,7 @@ async def register_for_event(event_id: int, registration: EventRegistrationCreat
     """Register for an event."""
     # Check if event exists and is published
     event = await fetch_one(
-        "SELECT id FROM events WHERE id = %s AND is_published = true", 
+        "SELECT id FROM events WHERE id = %s AND published = true", 
         (event_id,)
     )
     
