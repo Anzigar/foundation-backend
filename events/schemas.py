@@ -67,13 +67,13 @@ class EventUpdate(BaseModel):
 class EventResponse(EventBase):
     id: int
     slug: str
-    organizer_id: int
+    organizer_id: Optional[int] = None
     published_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    view_count: int
-    share_count: int
-    comment_count: int
+    view_count: int = 0
+    share_count: int = 0
+    comment_count: int = 0
     categories: List[EventCategoryResponse] = []
     related_events: Optional[List[Dict[str, Any]]] = None
 
@@ -85,7 +85,7 @@ class EventListItem(BaseModel):
     start_date: datetime
     end_date: Optional[datetime]
     image_url: Optional[str]
-    organizer_id: int
+    organizer_id: Optional[int] = None
     published: bool
     featured: bool
 
