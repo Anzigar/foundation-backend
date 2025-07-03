@@ -76,6 +76,10 @@ class EventResponse(EventBase):
     comment_count: int = 0
     categories: List[EventCategoryResponse] = []
     related_events: Optional[List[Dict[str, Any]]] = None
+    
+    class Config:
+        from_attributes = True
+        extra = "ignore"  # Ignore extra fields from database
 
 class EventListItem(BaseModel):
     id: int

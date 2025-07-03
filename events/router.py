@@ -102,7 +102,18 @@ async def get_event_by_id(event_id: int):
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
-    return event
+    # Transform the database response to match the schema
+    event_dict = dict(event)
+    event_dict.update({
+        'organizer_id': None,
+        'view_count': 0,
+        'share_count': 0,
+        'comment_count': 0,
+        'categories': [],
+        'related_events': []
+    })
+    
+    return event_dict
 
 @router.get("/{slug}", response_model=EventResponse)
 async def get_event(slug: str):
@@ -117,7 +128,18 @@ async def get_event(slug: str):
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
-    return event
+    # Transform the database response to match the schema
+    event_dict = dict(event)
+    event_dict.update({
+        'organizer_id': None,
+        'view_count': 0,
+        'share_count': 0,
+        'comment_count': 0,
+        'categories': [],
+        'related_events': []
+    })
+    
+    return event_dict
 
 @router.post("/", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 async def create_event(event: EventCreate):
