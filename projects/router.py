@@ -40,7 +40,7 @@ async def get_projects(
         i.id as image_id, i.title as image_title, 
         i.description as image_description, i.image_url
     FROM projects p
-    LEFT JOIN project_images i ON p.id = i.project_id AND i.primary = true
+    LEFT JOIN project_images i ON p.id = i.project_id AND i.primary_image = true
     WHERE p.public = true
     """
     
@@ -221,7 +221,7 @@ async def create_project(project: ProjectCreate):
             image_query = """
             INSERT INTO project_images (
                 project_id, title, description, image_url, 
-                primary, order_index
+                primary_image, order_index
             ) VALUES (%s, %s, %s, %s, %s, %s)
             """
             
