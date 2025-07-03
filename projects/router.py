@@ -141,7 +141,7 @@ async def get_project(slug: str):
     images_query = """
     SELECT * FROM project_images 
     WHERE project_id = %s
-    ORDER BY "order" ASC, created_at ASC
+    ORDER BY order_index ASC, created_at ASC
     """
     
     images = await fetch_all(images_query, (project["id"],))
@@ -215,7 +215,7 @@ async def create_project(project: ProjectCreate):
             image_query = """
             INSERT INTO project_images (
                 project_id, title, description, image_url, 
-                primary_image, "order"
+                primary_image, order_index
             ) VALUES (%s, %s, %s, %s, %s, %s)
             """
             
@@ -385,7 +385,7 @@ async def add_project_image(
     # Add the image to the project
     query = """
     INSERT INTO project_images (
-        project_id, title, description, image_url, primary_image, "order"
+        project_id, title, description, image_url, primary_image, order_index
     ) VALUES (%s, %s, %s, %s, %s, %s)
     """
     
@@ -439,7 +439,7 @@ async def update_project_image(image_id: int, image_update: ProjectImageUpdate):
             )
     
     if image_update.order is not None:
-        update_fields.append("\"order\" = %s")
+        update_fields.append("order_index = %s")
         params.append(image_update.order)
     
     # Update the image if there are fields to update

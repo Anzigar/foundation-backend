@@ -385,7 +385,7 @@ async def seed_projects():
         for img in sample_images:
             await execute_query("""
                 INSERT INTO project_images (
-                    project_id, title, description, image_url, "primary", "order", created_at
+                    project_id, title, description, image_url, primary_image, order_index, created_at
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 project_id, img["title"], img["description"], img["image_url"],

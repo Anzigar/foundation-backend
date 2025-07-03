@@ -1,0 +1,24 @@
+meta {
+  name: filemanagement
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:8000/v1/api/files/create
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "filename": "profile_image_01.jpg",
+    "original_filename": "IMG_20250701_104500.jpg",
+    "content_type": "image/jpeg",
+    "file_size": 204857,
+    "url": "https://cdn.smartinno.com/uploads/profile_image_01.jpg",
+    "thumbnail_url": "https://cdn.smartinno.com/thumbnails/profile_image_01_thumb.jpg",
+    "tags": ["profile", "user", "avatar"]
+  }
+  
+}
