@@ -40,7 +40,7 @@ async def get_projects(
         i.id as image_id, i.title as image_title, 
         i.description as image_description, i.image_url
     FROM projects p
-    LEFT JOIN project_images i ON p.id = i.project_id AND i.primary_image = true
+    LEFT JOIN project_images i ON p.id = i.project_id AND i.primary = true
     WHERE p.public = true
     """
     
@@ -105,7 +105,7 @@ async def get_projects(
                     "image_url": item["image_url"],
                     "project_id": item["id"],
                     "primary": True,
-                    "order": 0,
+                    "order_index": 0,
                     "created_at": item["created_at"]
                 }
             
@@ -126,13 +126,19 @@ async def get_projects(
         "has_more": has_more
     }
 
-@router.get("/{slug}", response_model=ProjectResponse)
-async def get_project(slug: str):
-    """Get a single project by slug."""
-    # Get project
-    project_query = "SELECT * FROM projects WHERE slug = %s AND public = true"
-    
-    project = await fetch_one(project_query, (slug,))
+@router.get("/{identifier}", response_model=ProjectResponse)
+async def get_project(identifier: str):
+    """Get a single project by slug or ID."""
+    # Try to determine if identifier is an ID (numeric) or slug
+    try:
+        project_id = int(identifier)
+        # Get project by ID
+        project_query = "SELECT * FROM projects WHERE id = %s AND public = true"
+        project = await fetch_one(project_query, (project_id,))
+    except ValueError:
+        # Get project by slug
+        project_query = "SELECT * FROM projects WHERE slug = %s AND public = true"
+        project = await fetch_one(project_query, (identifier,))
     
     if not project:
         raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)
@@ -215,7 +221,7 @@ async def create_project(project: ProjectCreate):
             image_query = """
             INSERT INTO project_images (
                 project_id, title, description, image_url, 
-                primary_image, order_index
+                primary, order_index
             ) VALUES (%s, %s, %s, %s, %s, %s)
             """
             
@@ -230,12 +236,12 @@ async def create_project(project: ProjectCreate):
                     image.description,
                     image.image_url,
                     is_primary,
-                    image.order or i
+                    image.order_index or i
                 )
             )
     
     # Return the newly created project
-    return await get_project(project.slug)
+    return await get_project(str(result["id"]))
 
 @router.put("/{project_id}", response_model=ProjectResponse)
 async def update_project(project_id: int, project_update: ProjectUpdate):
@@ -331,8 +337,8 @@ async def update_project(project_id: int, project_update: ProjectUpdate):
         await execute_query(update_query, tuple(params))
     
     # Get the updated project
-    updated_project = await fetch_one("SELECT slug FROM projects WHERE id = %s", (project_id,))
-    return await get_project(updated_project["slug"])
+    updated_project = await fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,))
+    return await get_project(str(updated_project["id"]))
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(project_id: int):
@@ -355,7 +361,7 @@ async def add_project_image(
     title: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     primary: bool = Form(False),
-    order: int = Form(0),
+    order_index: int = Form(0),
     image: UploadFile = File(...),
 ):
     """Add an image to a project."""
@@ -378,20 +384,20 @@ async def add_project_image(
     # If this is primary, update other images to not be primary
     if primary:
         await execute_query(
-            "UPDATE project_images SET primary_image = false WHERE project_id = %s",
+            "UPDATE project_images SET primary = false WHERE project_id = %s",
             (project_id,)
         )
     
     # Add the image to the project
     query = """
     INSERT INTO project_images (
-        project_id, title, description, image_url, primary_image, order_index
+        project_id, title, description, image_url, primary, order_index
     ) VALUES (%s, %s, %s, %s, %s, %s)
     """
     
     await execute_query(
         query,
-        (project_id, title, description, image_url, primary, order)
+        (project_id, title, description, image_url, primary, order_index)
     )
     
     # Get the newly created image
@@ -428,19 +434,19 @@ async def update_project_image(image_id: int, image_update: ProjectImageUpdate):
         params.append(image_update.image_url)
     
     if image_update.primary is not None:
-        update_fields.append("primary_image = %s")
+        update_fields.append("primary = %s")
         params.append(image_update.primary)
         
         # If setting as primary, update other images to not be primary
         if image_update.primary:
             await execute_query(
-                "UPDATE project_images SET primary_image = false WHERE project_id = %s AND id != %s",
+                "UPDATE project_images SET primary = false WHERE project_id = %s AND id != %s",
                 (existing["project_id"], image_id)
             )
     
-    if image_update.order is not None:
+    if image_update.order_index is not None:
         update_fields.append("order_index = %s")
-        params.append(image_update.order)
+        params.append(image_update.order_index)
     
     # Update the image if there are fields to update
     if update_fields:

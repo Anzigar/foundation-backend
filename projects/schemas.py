@@ -8,7 +8,7 @@ class ProjectImageBase(BaseModel):
     description: Optional[str] = None
     image_url: str
     primary: bool = False
-    order: int = 0
+    order_index: int = 0
 
 class ProjectImageCreate(ProjectImageBase):
     pass
@@ -18,7 +18,7 @@ class ProjectImageUpdate(BaseModel):
     description: Optional[str] = None
     image_url: Optional[str] = None
     primary: Optional[bool] = None
-    order: Optional[int] = None
+    order_index: Optional[int] = None
 
 class ProjectImageResponse(ProjectImageBase):
     id: int

@@ -37,5 +37,5 @@ class ProjectImage(Base):
     description = Column(Text)
     image_url = Column(String(255), nullable=False)
     primary = Column(Boolean, default=False)
-    order = Column(Integer, default=0)
+    order_index = Column(Integer, default=0)
     created_at = Column(DateTime, default=func.now())
