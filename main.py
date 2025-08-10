@@ -135,6 +135,18 @@ async def redoc_html():
         redoc_favicon_url="/static/favicon.png"
     )
 
+# Handle preflight OPTIONS requests
+@app.options("/{path:path}")
+async def handle_options(path: str):
+    """Handle preflight OPTIONS requests for CORS."""
+    from fastapi import Response
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
 # Custom OpenAPI schema generation
 @app.get("/api/openapi.json", include_in_schema=False)
 async def get_open_api_endpoint():
@@ -165,12 +177,20 @@ async def get_open_api_endpoint():
 # GZIP compression middleware for smaller response payloads
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS middleware - Allow all origins for development
+# CORS middleware - Allow specific origins for production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=[
+        "https://pathwaysdashboard.web.app",
+        "https://pathwaysfoundationforthepoor.org",
+        "https://www.pathwaysfoundationforthepoor.org",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8080",
+        "https://backend.pathwaysfoundationforthepoor.org"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 
