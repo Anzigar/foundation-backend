@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr, HttpUrl, field_serializer
+from pydantic import BaseModel, Field, EmailStr, HttpUrl
 
 class EventCategoryBase(BaseModel):
     name: str
@@ -12,12 +12,10 @@ class EventCategoryCreate(EventCategoryBase):
     pass
 
 class EventCategoryResponse(EventCategoryBase):
-    id: UUID  # Keep as UUID in schema
+    uid: UUID  # Changed to UUID
     
-    @field_serializer('id')
-    def serialize_id(self, value: UUID) -> str:
-        """Convert UUID to string for JSON serialization"""
-        return str(value)
+    class Config:
+        from_attributes = True
 
 class EventBase(BaseModel):
     title: str
@@ -71,7 +69,7 @@ class EventUpdate(BaseModel):
     related_event_ids: Optional[List[str]] = None
 
 class EventResponse(EventBase):
-    id: UUID  # Keep as UUID in schema
+    uid: UUID  # Changed to UUID
     slug: str
     organizer_id: Optional[UUID] = None
     published_at: Optional[datetime] = None
@@ -83,17 +81,12 @@ class EventResponse(EventBase):
     categories: List[EventCategoryResponse] = []
     related_events: Optional[List[Dict[str, Any]]] = None
     
-    @field_serializer('id', 'organizer_id')
-    def serialize_uuid(self, value: Optional[UUID]) -> Optional[str]:
-        """Convert UUID to string for JSON serialization"""
-        return str(value) if value else None
-    
     class Config:
         from_attributes = True
         extra = "ignore"
 
 class EventListItem(BaseModel):
-    id: UUID  # Keep as UUID in schema
+    uid: UUID  # Changed to UUID
     title: str
     slug: str
     location: Optional[str]
@@ -104,10 +97,8 @@ class EventListItem(BaseModel):
     published: bool
     featured: bool
     
-    @field_serializer('id', 'organizer_id')
-    def serialize_uuid(self, value: Optional[UUID]) -> Optional[str]:
-        """Convert UUID to string for JSON serialization"""
-        return str(value) if value else None
+    class Config:
+        from_attributes = True
 
 class EventRegistrationCreate(BaseModel):
     name: str
@@ -115,7 +106,7 @@ class EventRegistrationCreate(BaseModel):
     phone: Optional[str] = None
 
 class EventRegistrationResponse(EventRegistrationCreate):
-    id: UUID
+    uid: UUID
     event_id: UUID
     created_at: datetime
 
@@ -123,13 +114,13 @@ class EventCommentBase(BaseModel):
     author_name: str
     author_email: EmailStr
     content: str
-    parent_id: Optional[UUID] = None
+    parent_id: Optional[int] = None
 
 class EventCommentCreate(EventCommentBase):
     pass
 
 class EventCommentResponse(EventCommentBase):
-    id: UUID
+    uid: UUID
     event_id: UUID
     is_approved: bool
     created_at: datetime
