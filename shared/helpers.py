@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
 def convert_uuid_params(params: tuple) -> tuple:
@@ -70,29 +71,33 @@ async def _fetch_with_session(query: str, params: Optional[tuple], session: Asyn
         # Detect UUID column positions
         uuid_positions = detect_uuid_columns(query)
         
-        # Convert the query to use named parameters and create a parameter dictionary
+        # Convert %s placeholders to named parameters and create bindparams
         param_dict = {}
+        bind_params = []
         modified_query = query
         
-        # First pass: replace all %s with named parameters
         for i, param in enumerate(params):
             param_name = f"param{i+1}"
-            param_dict[param_name] = param
-            # Replace the first %s with :param_name (we'll add casting later)
-            modified_query = modified_query.replace('%s', f':{param_name}', 1)
+            
+            # Handle UUID parameters with proper type casting
+            if i in uuid_positions and isinstance(param, (str, uuid.UUID)):
+                # Convert UUID objects to strings
+                param_value = str(param) if isinstance(param, uuid.UUID) else param
+                param_dict[param_name] = param_value
+                
+                # Create a bindparam with UUID type
+                bind_params.append(bindparam(param_name, type_=UUID()))
+                # Replace %s with named parameter
+                modified_query = modified_query.replace('%s', f':{param_name}', 1)
+            else:
+                param_dict[param_name] = param
+                bind_params.append(bindparam(param_name))
+                # Replace %s with named parameter
+                modified_query = modified_query.replace('%s', f':{param_name}', 1)
         
-        # Second pass: add UUID casting where needed
-        for i in uuid_positions:
-            if i < len(params):
-                param_name = f"param{i+1}"
-                if isinstance(params[i], (str, uuid.UUID)):
-                    # Convert UUID objects to strings and add casting
-                    if isinstance(params[i], uuid.UUID):
-                        param_dict[param_name] = str(params[i])
-                    # Add ::uuid casting to the query
-                    modified_query = modified_query.replace(f':{param_name}', f':{param_name}::uuid')
-        
-        result = await session.execute(text(modified_query), param_dict)
+        # Create the statement with bindparams
+        stmt = text(modified_query).bindparams(*bind_params)
+        result = await session.execute(stmt, param_dict)
     else:
         result = await session.execute(text(query))
     
@@ -119,29 +124,33 @@ async def _execute_with_session(query: str, params: Optional[tuple], session: As
         # Detect UUID column positions
         uuid_positions = detect_uuid_columns(query)
         
-        # Convert the query to use named parameters and create a parameter dictionary
+        # Convert %s placeholders to named parameters and create bindparams
         param_dict = {}
+        bind_params = []
         modified_query = query
         
-        # First pass: replace all %s with named parameters
         for i, param in enumerate(params):
             param_name = f"param{i+1}"
-            param_dict[param_name] = param
-            # Replace the first %s with :param_name (we'll add casting later)
-            modified_query = modified_query.replace('%s', f':{param_name}', 1)
+            
+            # Handle UUID parameters with proper type casting
+            if i in uuid_positions and isinstance(param, (str, uuid.UUID)):
+                # Convert UUID objects to strings
+                param_value = str(param) if isinstance(param, uuid.UUID) else param
+                param_dict[param_name] = param_value
+                
+                # Create a bindparam with UUID type
+                bind_params.append(bindparam(param_name, type_=UUID()))
+                # Replace %s with named parameter
+                modified_query = modified_query.replace('%s', f':{param_name}', 1)
+            else:
+                param_dict[param_name] = param
+                bind_params.append(bindparam(param_name))
+                # Replace %s with named parameter
+                modified_query = modified_query.replace('%s', f':{param_name}', 1)
         
-        # Second pass: add UUID casting where needed
-        for i in uuid_positions:
-            if i < len(params):
-                param_name = f"param{i+1}"
-                if isinstance(params[i], (str, uuid.UUID)):
-                    # Convert UUID objects to strings and add casting
-                    if isinstance(params[i], uuid.UUID):
-                        param_dict[param_name] = str(params[i])
-                    # Add ::uuid casting to the query
-                    modified_query = modified_query.replace(f':{param_name}', f':{param_name}::uuid')
-        
-        result = await session.execute(text(modified_query), param_dict)
+        # Create the statement with bindparams
+        stmt = text(modified_query).bindparams(*bind_params)
+        result = await session.execute(stmt, param_dict)
     else:
         result = await session.execute(text(query))
     
