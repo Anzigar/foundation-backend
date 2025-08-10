@@ -20,10 +20,10 @@ def format_news_with_categories(news_items: List[Dict[str, Any]]) -> List[Dict[s
     current_news = None
     
     for item in news_items:
-        if current_news is None or current_news["id"] != item["id"]:
+        if current_news is None or current_news["uid"] != item["uid"]:
             # New news article
             current_news = {
-                "id": item["id"],
+                "uid": item["uid"],
                 "title": item["title"],
                 "slug": item["slug"],
                 "excerpt": item["excerpt"],
@@ -145,13 +145,13 @@ async def get_news_articles(
 
 @router.get("/id/{article_id}", response_model=NewsArticleResponse)
 async def get_news_article_by_id(article_id: str):
-    """Get a single news article by ID using raw SQL."""
+    """Get a single news article by UID using raw SQL."""
     query = """
     SELECT 
-        id, title, slug, content, excerpt, image_url, source,
+        uid, title, slug, content, excerpt, image_url, source,
         created_at, updated_at, published, featured, tags
     FROM news_articles
-    WHERE id = %s AND published = true
+    WHERE uid = %s AND published = true
     """
     
     article = await fetch_one(query, (article_id,))
@@ -166,7 +166,7 @@ async def get_news_article(slug: str):
     """Get a single news article by slug using raw SQL."""
     query = """
     SELECT 
-        id, title, slug, content, excerpt, image_url, source,
+        uid, title, slug, content, excerpt, image_url, source,
         created_at, updated_at, published, featured, tags
     FROM news_articles
     WHERE slug = %s AND published = true
@@ -186,18 +186,20 @@ async def create_news_article(article: NewsArticleCreate):
     if not article.slug:
         article.slug = generate_slug(article.title)
     
-    # Insert the news article (let database auto-generate ID)
+    # Insert the news article with generated UID
     query = """
     INSERT INTO news_articles 
-    (title, slug, content, excerpt, image_url, source, published, featured, tags, created_at, updated_at)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    (uid, title, slug, content, excerpt, image_url, source, published, featured, tags, created_at, updated_at)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
     now = datetime.now()
+    article_uid = uuid.uuid4()
     
     await execute_query(
         query, 
         (
+            article_uid,
             article.title, 
             article.slug, 
             article.content, 
@@ -220,7 +222,7 @@ async def create_news_article(article: NewsArticleCreate):
 async def update_news_article(article_id: str, article_update: NewsArticleUpdate):
     """Update an existing news article using raw SQL."""
     # First check if the article exists
-    existing = await fetch_one("SELECT slug FROM news_articles WHERE id = %s", (article_id,))
+    existing = await fetch_one("SELECT slug FROM news_articles WHERE uid = %s", (article_id,))
     
     if not existing:
         raise HTTPException(status_code=404, detail="News article not found")
@@ -270,8 +272,8 @@ async def update_news_article(article_id: str, article_update: NewsArticleUpdate
         params.append(article_id)
         await execute_query(update_query, tuple(params))
     
-    # Get the updated article by ID
-    result = await fetch_one("SELECT * FROM news_articles WHERE id = %s", (article_id,))
+    # Get the updated article by UID
+    result = await fetch_one("SELECT * FROM news_articles WHERE uid = %s", (article_id,))
     return result
 
 @router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -279,7 +281,7 @@ async def delete_news_article(article_id: str):
     """Delete a news article using raw SQL."""
     # Get the slug before deletion to clear cache
     article = await fetch_one(
-        "SELECT slug FROM news_articles WHERE id = %s", 
+        "SELECT slug FROM news_articles WHERE uid = %s", 
         (article_id,)
     )
     
@@ -287,7 +289,7 @@ async def delete_news_article(article_id: str):
         raise HTTPException(status_code=404, detail="News article not found")
     
     # Delete the article (categories will be deleted via ON DELETE CASCADE)
-    await execute_query("DELETE FROM news_articles WHERE id = %s", (article_id,))
+    await execute_query("DELETE FROM news_articles WHERE uid = %s", (article_id,))
     
     # Clear cache
     # await clear_cache(pattern=f"news:detail:{article['slug']}")
@@ -299,7 +301,7 @@ async def delete_news_article(article_id: str):
 async def toggle_news_article_publish(article_id: str):
     """Toggle the published status of a news article."""
     # First check if the article exists
-    existing = await fetch_one("SELECT id, published FROM news_articles WHERE id = %s", (article_id,))
+    existing = await fetch_one("SELECT uid, published FROM news_articles WHERE uid = %s", (article_id,))
     
     if not existing:
         raise HTTPException(status_code=404, detail="News article not found")
@@ -309,10 +311,10 @@ async def toggle_news_article_publish(article_id: str):
     
     # Update the article
     await execute_query(
-        "UPDATE news_articles SET published = %s, updated_at = %s WHERE id = %s",
+        "UPDATE news_articles SET published = %s, updated_at = %s WHERE uid = %s",
         (new_published_status, datetime.now(), article_id)
     )
     
     # Get the updated article
-    result = await fetch_one("SELECT * FROM news_articles WHERE id = %s", (article_id,))
+    result = await fetch_one("SELECT * FROM news_articles WHERE uid = %s", (article_id,))
     return result

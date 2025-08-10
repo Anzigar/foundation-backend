@@ -34,12 +34,12 @@ async def get_projects(
     # Base query - updated to match actual model structure
     query = """
     SELECT 
-        p.id, p.title, p.slug, p.description, p.project_image, 
+        p.uid, p.title, p.slug, p.description, p.project_image, 
         p.featured, p.is_ongoing, p.start_date, p.end_date, p.created_at,
-        i.id as image_id, i.title as image_title, 
+        i.uid as image_uid, i.title as image_title, 
         i.description as image_description, i.image_url
     FROM projects p
-    LEFT JOIN project_images i ON p.id = i.project_id
+    LEFT JOIN project_images i ON p.uid = i.project_uid
     WHERE p.public = true
     """
     
@@ -58,16 +58,16 @@ async def get_projects(
     # Apply cursor pagination
     if cursor:
         if order.lower() == "desc":
-            query += " AND p.id < %s"
+            query += " AND p.uid < %s"
         else:
-            query += " AND p.id > %s"
+            query += " AND p.uid > %s"
         params.append(cursor)
     
     # Order the results
     if order.lower() == "desc":
-        query += " ORDER BY p.id DESC"
+        query += " ORDER BY p.uid DESC"
     else:
-        query += " ORDER BY p.id ASC"
+        query += " ORDER BY p.uid ASC"
     
     # Get one more item to check if there are more results
     query += f" LIMIT {limit + 1}"
@@ -133,7 +133,7 @@ async def get_project(identifier: str):
         # Try to parse as UUID
         project_uuid = UUID(identifier)
         # Get project by UUID
-        project_query = "SELECT * FROM projects WHERE id = %s AND public = true"
+        project_query = "SELECT * FROM projects WHERE uid = %s AND public = true"
         project = await fetch_one(project_query, (project_uuid,))
     except ValueError:
         # Get project by slug
@@ -146,11 +146,11 @@ async def get_project(identifier: str):
     # Get project images
     images_query = """
     SELECT * FROM project_images 
-    WHERE project_id = %s
+    WHERE project_uid = %s
     ORDER BY order_index ASC, created_at ASC
     """
     
-    images = await fetch_all(images_query, (project["id"],))
+    images = await fetch_all(images_query, (project["uid"],))
     
     # Combine project and images
     project_dict = dict(project)
@@ -176,7 +176,7 @@ async def create_project(project: ProjectCreate):
     # Insert the project
     query = """
     INSERT INTO projects (
-        id, title, slug, description, project_image, project_image_preview,
+        uid, title, slug, description, project_image, project_image_preview,
         image_title, image_description, source_link, live_link, technologies,
         is_ongoing, start_date, end_date, featured, public
     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -185,7 +185,7 @@ async def create_project(project: ProjectCreate):
     # Convert technologies to JSON string
     import json
     import uuid
-    project_id = uuid.uuid4()
+    project_uid = uuid.uuid4()
     technologies_json = json.dumps(project.technologies) if project.technologies else "[]"
     
     # Convert timezone-aware datetimes to timezone-naive for database compatibility
@@ -195,7 +195,7 @@ async def create_project(project: ProjectCreate):
     await execute_query(
         query, 
         (
-            project_id,
+            project_uid,
             project.title, 
             project.slug, 
             project.description, 
@@ -216,17 +216,17 @@ async def create_project(project: ProjectCreate):
     
     # Get the created project
     result = await fetch_one("SELECT * FROM projects WHERE slug = %s", (project.slug,))
-    project_id = result["id"]
+    project_uid = result["uid"]
     
     # Add images if provided
     if project.images:
         for i, image in enumerate(project.images):
             import uuid
-            image_id = uuid.uuid4()
+            image_uid = uuid.uuid4()
             
             image_query = """
             INSERT INTO project_images (
-                id, project_id, title, description, image_url, 
+                uid, project_uid, title, description, image_url, 
                 is_primary, order_index
             ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """
@@ -237,8 +237,8 @@ async def create_project(project: ProjectCreate):
             await execute_query(
                 image_query,
                 (
-                    image_id,
-                    project_id,
+                    image_uid,
+                    project_uid,
                     image.title,
                     image.description,
                     image.image_url,
@@ -250,11 +250,11 @@ async def create_project(project: ProjectCreate):
     # Return the newly created project
     return await get_project(str(result["id"]))
 
-@router.put("/{project_id}", response_model=ProjectResponse)
-async def update_project(project_id: UUID, project_update: ProjectUpdate):
+@router.put("/{project_uid}", response_model=ProjectResponse)
+async def update_project(project_uid: str, project_update: ProjectUpdate):
     """Update an existing project."""
     # Check if project exists
-    existing = await fetch_one("SELECT slug FROM projects WHERE id = %s", (project_id,))
+    existing = await fetch_one("SELECT slug FROM projects WHERE uid = %s", (project_uid,))
     
     if not existing:
         raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)

@@ -11,7 +11,7 @@ class Project(Base):
     """Project model for showcasing foundation projects."""
     __tablename__ = "projects"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     title = Column(String(255), nullable=False)
     slug = Column(String(255), unique=True, nullable=False, index=True)
     description = Column(Text, nullable=False)
@@ -49,8 +49,8 @@ class ProjectImage(Base):
     """Images associated with projects."""
     __tablename__ = "project_images"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False)  # Reference to Project.id
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    project_uid = Column(UUID(as_uuid=True), ForeignKey("projects.uid"), nullable=False)  # Reference to Project.uid
     title = Column(String(255))
     description = Column(Text)
     image_url = Column(String(255), CheckConstraint("image_url ~ '^https?://'"), nullable=True)

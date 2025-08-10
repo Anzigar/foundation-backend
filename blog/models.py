@@ -10,7 +10,7 @@ from shared.database import Base
 class BlogPost(Base):
     __tablename__ = "blog_posts"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     title = Column(String(255), nullable=False)
     slug = Column(String(255), nullable=False, unique=True, index=True)
     content = Column(Text, nullable=False)

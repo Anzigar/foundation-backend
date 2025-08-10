@@ -1,0 +1,15 @@
+meta {
+  name: news-slug
+  type: http
+  seq: 20
+}
+
+get {
+  url: https://backend.pathwaysfoundationforthepoor.org/api/news/{slug}
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
