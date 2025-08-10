@@ -74,22 +74,23 @@ async def _fetch_with_session(query: str, params: Optional[tuple], session: Asyn
         param_dict = {}
         modified_query = query
         
+        # First pass: replace all %s with named parameters
         for i, param in enumerate(params):
             param_name = f"param{i+1}"
-            
-            # Keep UUID values as strings but cast them in SQL
-            if i in uuid_positions and isinstance(param, str) and is_uuid_string(param):
-                param_dict[param_name] = param  # Keep as string
-                # Replace %s with :param_name::uuid for UUID parameters
-                modified_query = modified_query.replace('%s', f':{param_name}::uuid', 1)
-            elif isinstance(param, uuid.UUID):
-                # Convert UUID objects to strings and cast in SQL
-                param_dict[param_name] = str(param)
-                modified_query = modified_query.replace('%s', f':{param_name}::uuid', 1)
-            else:
-                param_dict[param_name] = param
-                # Replace the first %s with :param_name
-                modified_query = modified_query.replace('%s', f':{param_name}', 1)
+            param_dict[param_name] = param
+            # Replace the first %s with :param_name (we'll add casting later)
+            modified_query = modified_query.replace('%s', f':{param_name}', 1)
+        
+        # Second pass: add UUID casting where needed
+        for i in uuid_positions:
+            if i < len(params):
+                param_name = f"param{i+1}"
+                if isinstance(params[i], (str, uuid.UUID)):
+                    # Convert UUID objects to strings and add casting
+                    if isinstance(params[i], uuid.UUID):
+                        param_dict[param_name] = str(params[i])
+                    # Add ::uuid casting to the query
+                    modified_query = modified_query.replace(f':{param_name}', f':{param_name}::uuid')
         
         result = await session.execute(text(modified_query), param_dict)
     else:
@@ -122,22 +123,23 @@ async def _execute_with_session(query: str, params: Optional[tuple], session: As
         param_dict = {}
         modified_query = query
         
+        # First pass: replace all %s with named parameters
         for i, param in enumerate(params):
             param_name = f"param{i+1}"
-            
-            # Keep UUID values as strings but cast them in SQL
-            if i in uuid_positions and isinstance(param, str) and is_uuid_string(param):
-                param_dict[param_name] = param  # Keep as string
-                # Replace %s with :param_name::uuid for UUID parameters
-                modified_query = modified_query.replace('%s', f':{param_name}::uuid', 1)
-            elif isinstance(param, uuid.UUID):
-                # Convert UUID objects to strings and cast in SQL
-                param_dict[param_name] = str(param)
-                modified_query = modified_query.replace('%s', f':{param_name}::uuid', 1)
-            else:
-                param_dict[param_name] = param
-                # Replace the first %s with :param_name
-                modified_query = modified_query.replace('%s', f':{param_name}', 1)
+            param_dict[param_name] = param
+            # Replace the first %s with :param_name (we'll add casting later)
+            modified_query = modified_query.replace('%s', f':{param_name}', 1)
+        
+        # Second pass: add UUID casting where needed
+        for i in uuid_positions:
+            if i < len(params):
+                param_name = f"param{i+1}"
+                if isinstance(params[i], (str, uuid.UUID)):
+                    # Convert UUID objects to strings and add casting
+                    if isinstance(params[i], uuid.UUID):
+                        param_dict[param_name] = str(params[i])
+                    # Add ::uuid casting to the query
+                    modified_query = modified_query.replace(f':{param_name}', f':{param_name}::uuid')
         
         result = await session.execute(text(modified_query), param_dict)
     else:
