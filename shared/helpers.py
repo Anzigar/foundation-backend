@@ -1,6 +1,20 @@
 from typing import Any, Dict, List, Optional
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
+
+def convert_uuid_params(params: tuple) -> tuple:
+    """Convert UUID objects to strings for PostgreSQL compatibility."""
+    if not params:
+        return params
+    
+    converted = []
+    for param in params:
+        if isinstance(param, uuid.UUID):
+            converted.append(str(param))
+        else:
+            converted.append(param)
+    return tuple(converted)
 
 async def fetch_all(query: str, params: Optional[tuple] = None, db: AsyncSession = None) -> List[Dict[str, Any]]:
     """Execute a query and fetch all results as dicts using SQLAlchemy."""
@@ -14,6 +28,10 @@ async def fetch_all(query: str, params: Optional[tuple] = None, db: AsyncSession
         return await _fetch_with_session(query, params, db)
 
 async def _fetch_with_session(query: str, params: Optional[tuple], session: AsyncSession) -> List[Dict[str, Any]]:
+    # Convert UUID objects to strings
+    if params:
+        params = convert_uuid_params(params)
+    
     # Convert %s placeholders to :param1, :param2, etc. for SQLAlchemy
     if params:
         # Replace each %s with a numbered parameter
@@ -48,6 +66,10 @@ async def execute_query(query: str, params: Optional[tuple] = None, db: AsyncSes
         return await _execute_with_session(query, params, db)
 
 async def _execute_with_session(query: str, params: Optional[tuple], session: AsyncSession) -> int:
+    # Convert UUID objects to strings
+    if params:
+        params = convert_uuid_params(params)
+    
     # Convert %s placeholders to :param1, :param2, etc. for SQLAlchemy
     if params:
         # Create a dictionary of named parameters

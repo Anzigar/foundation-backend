@@ -39,7 +39,7 @@ async def get_projects(
         i.id as image_id, i.title as image_title, 
         i.description as image_description, i.image_url
     FROM projects p
-    LEFT JOIN project_images i ON p.id = i.project_id AND i.is_primary = true
+    LEFT JOIN project_images i ON p.id = i.project_id
     WHERE p.public = true
     """
     
