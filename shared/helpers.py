@@ -15,7 +15,15 @@ async def fetch_all(query: str, params: Optional[tuple] = None, db: AsyncSession
 
 async def _fetch_with_session(query: str, params: Optional[tuple], session: AsyncSession) -> List[Dict[str, Any]]:
     if params:
-        result = await session.execute(text(query), params)
+        # Convert %s placeholders to numbered parameters for SQLAlchemy
+        param_dict = {}
+        modified_query = query
+        for i, param in enumerate(params):
+            param_name = f"param{i+1}"
+            param_dict[param_name] = param
+            modified_query = modified_query.replace('%s', f':{param_name}', 1)
+        
+        result = await session.execute(text(modified_query), param_dict)
     else:
         result = await session.execute(text(query))
     
@@ -47,7 +55,15 @@ async def execute_query(query: str, params: Optional[tuple] = None, db: AsyncSes
 
 async def _execute_with_session(query: str, params: Optional[tuple], session: AsyncSession) -> int:
     if params:
-        result = await session.execute(text(query), params)
+        # Convert %s placeholders to numbered parameters for SQLAlchemy
+        param_dict = {}
+        modified_query = query
+        for i, param in enumerate(params):
+            param_name = f"param{i+1}"
+            param_dict[param_name] = param
+            modified_query = modified_query.replace('%s', f':{param_name}', 1)
+        
+        result = await session.execute(text(modified_query), param_dict)
     else:
         result = await session.execute(text(query))
     
