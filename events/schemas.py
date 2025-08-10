@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
 from pydantic import BaseModel, Field, EmailStr, HttpUrl
 
@@ -12,7 +12,22 @@ class EventCategoryCreate(EventCategoryBase):
     pass
 
 class EventCategoryResponse(EventCategoryBase):
-    uid: UUID  # Changed to UUID
+    uid: Union[int, UUID]  # Support both int and UUID during transition
+    
+    class Config:
+        from_attributes = True
+from pydantic import BaseModel, Field, EmailStr, HttpUrl
+
+class EventCategoryBase(BaseModel):
+    name: str
+    slug: str
+    description: Optional[str] = None
+
+class EventCategoryCreate(EventCategoryBase):
+    pass
+
+class EventCategoryResponse(EventCategoryBase):
+    uid: Union[int, UUID]  # Support both int and UUID during transition
     
     class Config:
         from_attributes = True
@@ -69,9 +84,9 @@ class EventUpdate(BaseModel):
     related_event_ids: Optional[List[str]] = None
 
 class EventResponse(EventBase):
-    uid: UUID  # Changed to UUID
+    uid: Union[int, UUID]  # Support both int and UUID during transition
     slug: str
-    organizer_id: Optional[UUID] = None
+    organizer_id: Optional[Union[int, UUID]] = None
     published_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

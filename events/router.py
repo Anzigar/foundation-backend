@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -134,14 +134,11 @@ async def create_event(event: EventCreate):
     if not event.slug:
         event.slug = generate_slug(event.title)
     
-    # Insert the event
-    import uuid
-    event_id = uuid.uuid4()
-    
+    # Insert the event (temporarily removing uid from insert since it's auto-increment)
     query = """
     INSERT INTO events 
-    (uid, title, slug, description, excerpt, location, start_date, end_date, image_url, published, featured)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    (title, slug, description, excerpt, location, start_date, end_date, image_url, published, featured)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     RETURNING uid
     """
     
@@ -152,7 +149,6 @@ async def create_event(event: EventCreate):
     result = await fetch_one(
         query, 
         (
-            event_id,
             event.title, 
             event.slug, 
             event.description,
@@ -166,10 +162,16 @@ async def create_event(event: EventCreate):
         )
     )
     
+    if not result:
+        raise HTTPException(status_code=500, detail="Failed to create event")
+    
     event_uid = result['uid']
     
     # Get the newly created event
     new_event = await fetch_one("SELECT * FROM events WHERE uid = %s", (event_uid,))
+    
+    if not new_event:
+        raise HTTPException(status_code=500, detail="Failed to retrieve created event")
     
     # Transform the database response to match the schema
     event_dict = dict(new_event)
@@ -185,7 +187,7 @@ async def create_event(event: EventCreate):
     return event_dict
 
 @router.put("/{event_id}", response_model=EventResponse)
-async def update_event(event_id: UUID, event_update: EventUpdate):
+async def update_event(event_id: Union[int, UUID], event_update: EventUpdate):
     """Update an existing event using raw SQL."""
     # First check if the event exists
     existing = await fetch_one("SELECT slug FROM events WHERE uid = %s", (event_id,))
@@ -253,7 +255,7 @@ async def update_event(event_id: UUID, event_update: EventUpdate):
     return event_dict
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_event(event_id: UUID):
+async def delete_event(event_id: Union[int, UUID]):
     """Delete an event using raw SQL."""
     # Get the slug before deletion to clear cache
     event = await fetch_one(
@@ -271,7 +273,7 @@ async def delete_event(event_id: UUID):
 
 # Event registration routes
 @router.post("/{event_id}/register", response_model=EventRegistrationResponse)
-async def register_for_event(event_id: UUID, registration: EventRegistrationCreate):
+async def register_for_event(event_id: Union[int, UUID], registration: EventRegistrationCreate):
     """Register for an event."""
     # Check if event exists and is published
     event = await fetch_one(
@@ -295,7 +297,7 @@ async def register_for_event(event_id: UUID, registration: EventRegistrationCrea
     }
 
 @router.get("/{event_id}/registrations", response_model=List[EventRegistrationResponse])
-async def get_event_registrations(event_id: UUID):
+async def get_event_registrations(event_id: Union[int, UUID]):
     """Get all registrations for an event."""
     # Check if event exists
     event = await fetch_one("SELECT uid FROM events WHERE uid = %s", (event_id,))
