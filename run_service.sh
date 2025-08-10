@@ -66,6 +66,15 @@ except Exception as e:
 if [ $? -eq 0 ]; then
     log "✅ Database connection verified!"
     
+    # Fix events sequence first
+    log "🔧 Fixing events auto-increment sequence..."
+    docker exec foundation-api python3 fix_events_sequence.py
+    if [ $? -eq 0 ]; then
+        log "✅ Events sequence fixed successfully!"
+    else
+        log "❌ Events sequence fix failed - continuing anyway"
+    fi
+    
     # Run the events migration
     log "🔄 Running events migration to UUID..."
     docker exec foundation-api python3 migrate_events_to_uuid.py
