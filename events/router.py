@@ -143,7 +143,7 @@ async def create_event(event: EventCreate):
     INSERT INTO events 
     (uid, title, slug, description, excerpt, location, start_date, end_date, image_url, published, featured)
     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    RETURNING uid
+    RETURNING *
     """
     
     # Convert timezone-aware datetime to timezone-naive for database compatibility
@@ -170,13 +170,9 @@ async def create_event(event: EventCreate):
     if not result:
         raise HTTPException(status_code=500, detail="Failed to create event")
     
-    event_uid = result['uid']
-    
-    # Get the newly created event
-    new_event = await fetch_one("SELECT * FROM events WHERE uid = %s", (event_uid,))
-    
-    if not new_event:
-        raise HTTPException(status_code=500, detail="Failed to retrieve created event")
+    # Use the returned data directly instead of fetching again
+    new_event = result
+    print(f"DEBUG: Created event successfully: {new_event.get('uid')}")
     
     # Transform the database response to match the schema
     event_dict = dict(new_event)
