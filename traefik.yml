@@ -18,7 +18,7 @@ api:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: jastinlasway10@gmail.com
+      email: admin@pathwaysfoundationforthepoor.org
       storage: acme.json
       tlsChallenge: {}
 

@@ -165,10 +165,10 @@ async def get_open_api_endpoint():
 # GZIP compression middleware for smaller response payloads
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS middleware
+# CORS middleware - Allow all origins for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
