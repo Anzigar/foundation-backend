@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
+import uuid
 
 from news.schemas import (
     NewsArticleCreate, 
@@ -143,7 +144,7 @@ async def get_news_articles(
     }
 
 @router.get("/id/{article_id}", response_model=NewsArticleResponse)
-async def get_news_article_by_id(article_id: int):
+async def get_news_article_by_id(article_id: str):
     """Get a single news article by ID using raw SQL."""
     query = """
     SELECT 
@@ -216,7 +217,7 @@ async def create_news_article(article: NewsArticleCreate):
     return result
 
 @router.put("/{article_id}", response_model=NewsArticleResponse)
-async def update_news_article(article_id: int, article_update: NewsArticleUpdate):
+async def update_news_article(article_id: str, article_update: NewsArticleUpdate):
     """Update an existing news article using raw SQL."""
     # First check if the article exists
     existing = await fetch_one("SELECT slug FROM news_articles WHERE id = %s", (article_id,))
@@ -274,7 +275,7 @@ async def update_news_article(article_id: int, article_update: NewsArticleUpdate
     return result
 
 @router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_news_article(article_id: int):
+async def delete_news_article(article_id: str):
     """Delete a news article using raw SQL."""
     # Get the slug before deletion to clear cache
     article = await fetch_one(
@@ -295,7 +296,7 @@ async def delete_news_article(article_id: int):
     return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)
 
 @router.patch("/{article_id}/toggle-publish")
-async def toggle_news_article_publish(article_id: int):
+async def toggle_news_article_publish(article_id: str):
     """Toggle the published status of a news article."""
     # First check if the article exists
     existing = await fetch_one("SELECT id, published FROM news_articles WHERE id = %s", (article_id,))
