@@ -134,11 +134,15 @@ async def create_event(event: EventCreate):
     if not event.slug:
         event.slug = generate_slug(event.title)
     
-    # Insert the event (temporarily removing uid from insert since it's auto-increment)
+    # Generate UUID for the new event
+    import uuid
+    event_uid = uuid.uuid4()
+    
+    # Insert the event with explicit UID
     query = """
     INSERT INTO events 
-    (title, slug, description, excerpt, location, start_date, end_date, image_url, published, featured)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    (uid, title, slug, description, excerpt, location, start_date, end_date, image_url, published, featured)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     RETURNING uid
     """
     
@@ -149,6 +153,7 @@ async def create_event(event: EventCreate):
     result = await fetch_one(
         query, 
         (
+            event_uid,
             event.title, 
             event.slug, 
             event.description,
