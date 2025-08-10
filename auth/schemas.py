@@ -17,15 +17,11 @@ class UserCreate(BaseModel):
     email: EmailStr
     password_confirm: Optional[str] = None  # For frontend validation, not stored
     
-    @field_validator('username', mode='before')
-    @classmethod
-    def generate_username_from_email(cls, v, info):
-        """Auto-generate username from email if not provided."""
-        if v is None and info.data and 'email' in info.data:
-            email = info.data['email']
-            # Extract username part from email (before @)
-            return email.split('@')[0]
-        return v
+    def model_post_init(self, __context):
+        """Post-initialization processing."""
+        # Auto-generate username from email if not provided
+        if self.username is None and self.email:
+            self.username = self.email.split('@')[0]
     
     @field_validator('password')
     @classmethod
@@ -35,11 +31,11 @@ class UserCreate(BaseModel):
             raise ValueError('Password must be at least 8 characters long')
         return v
     
-    @field_validator('password_confirm', mode='before')
+    @field_validator('password_confirm', mode='after')
     @classmethod
     def validate_password_confirm(cls, v, info):
         """Validate password confirmation matches password."""
-        if v is not None and info.data and 'password' in info.data:
+        if v is not None and hasattr(info, 'data') and 'password' in info.data:
             if v != info.data['password']:
                 raise ValueError('Password confirmation does not match password')
         return v
