@@ -66,30 +66,17 @@ async def fetch_all(query: str, params: Optional[tuple] = None, db: AsyncSession
         return await _fetch_with_session(query, params, db)
 
 async def _fetch_with_session(query: str, params: Optional[tuple], session: AsyncSession) -> List[Dict[str, Any]]:
-    # Convert UUID objects to strings
     if params:
-        params = convert_uuid_params(params)
-    
-    # Convert %s placeholders to :param1, :param2, etc. for SQLAlchemy
-    if params:
-        # Replace each %s with a numbered parameter
-        param_dict = {}
-        modified_query = query
+        # Detect UUID column positions and convert UUID strings to UUID objects
         uuid_positions = detect_uuid_columns(query)
+        converted_params = list(params)
         
-        for i, param in enumerate(params):
-            param_name = f"param{i+1}"
-            param_dict[param_name] = param
-            
-            # Check if this parameter is a UUID that needs casting
-            if (i in uuid_positions and isinstance(param, str) and is_uuid_string(param)):
-                # Cast UUID strings to UUID type for PostgreSQL
-                modified_query = modified_query.replace('%s', f':{param_name}::uuid', 1)
-            else:
-                # Replace only the first %s with :paramN
-                modified_query = modified_query.replace('%s', f':{param_name}', 1)
-            
-        result = await session.execute(text(modified_query), param_dict)
+        for i in uuid_positions:
+            if i < len(converted_params) and isinstance(converted_params[i], str) and is_uuid_string(converted_params[i]):
+                # Convert string UUID to uuid.UUID object for PostgreSQL
+                converted_params[i] = uuid.UUID(converted_params[i])
+        
+        result = await session.execute(text(query), tuple(converted_params))
     else:
         result = await session.execute(text(query))
     
@@ -112,30 +99,17 @@ async def execute_query(query: str, params: Optional[tuple] = None, db: AsyncSes
         return await _execute_with_session(query, params, db)
 
 async def _execute_with_session(query: str, params: Optional[tuple], session: AsyncSession) -> int:
-    # Convert UUID objects to strings
     if params:
-        params = convert_uuid_params(params)
-    
-    # Convert %s placeholders to :param1, :param2, etc. for SQLAlchemy
-    if params:
-        # Create a dictionary of named parameters
-        param_dict = {}
-        modified_query = query
+        # Detect UUID column positions and convert UUID strings to UUID objects
         uuid_positions = detect_uuid_columns(query)
+        converted_params = list(params)
         
-        for i, param in enumerate(params):
-            param_name = f"param{i+1}"
-            param_dict[param_name] = param
-            
-            # Check if this parameter is a UUID that needs casting
-            if (i in uuid_positions and isinstance(param, str) and is_uuid_string(param)):
-                # Cast UUID strings to UUID type for PostgreSQL
-                modified_query = modified_query.replace('%s', f':{param_name}::uuid', 1)
-            else:
-                # Replace only the first %s with :paramN
-                modified_query = modified_query.replace('%s', f':{param_name}', 1)
-            
-        result = await session.execute(text(modified_query), param_dict)
+        for i in uuid_positions:
+            if i < len(converted_params) and isinstance(converted_params[i], str) and is_uuid_string(converted_params[i]):
+                # Convert string UUID to uuid.UUID object for PostgreSQL
+                converted_params[i] = uuid.UUID(converted_params[i])
+        
+        result = await session.execute(text(query), tuple(converted_params))
     else:
         result = await session.execute(text(query))
     
