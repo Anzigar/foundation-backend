@@ -1,13 +1,14 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+import uuid
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
 from news.schemas import (
     NewsArticleCreate, 
     NewsArticleResponse, 
-    NewsArticleUpdate, 
-    NewsArticleListItem
+    NewsArticleUpdate
 )
 from shared.utils import generate_slug
 from shared.helpers import fetch_all, fetch_one, execute_query
@@ -68,10 +69,10 @@ async def get_news_articles(
     # Base query - simplified to match our actual schema
     query = """
     SELECT 
-        id, title, slug, excerpt, image_url, author_name, 
-        created_at, updated_at, is_published, featured, category
+        id, title, slug, excerpt, image_url, source, 
+        created_at, updated_at, published, featured, tags
     FROM news_articles
-    WHERE is_published = true
+    WHERE published = true
     """
     
     params = []
@@ -120,11 +121,11 @@ async def get_news_articles(
             "slug": item["slug"],
             "excerpt": item["excerpt"],
             "image_url": item["image_url"],
-            "author_name": item["author_name"],
-            "category": item["category"],
+            "source": item["source"],
+            "tags": item["tags"],
             "created_at": item["created_at"],
             "updated_at": item["updated_at"],
-            "is_published": item["is_published"],
+            "published": item["published"],
             "featured": item["featured"]
         }
         formatted_news.append(formatted_item)
@@ -144,14 +145,14 @@ async def get_news_articles(
     }
 
 @router.get("/id/{article_id}", response_model=NewsArticleResponse)
-async def get_news_article_by_id(article_id: int):
+async def get_news_article_by_id(article_id: UUID):
     """Get a single news article by ID using raw SQL."""
     query = """
     SELECT 
-        id, title, slug, content, excerpt, image_url, author_name,
-        created_at, updated_at, is_published, featured, category
+        id, title, slug, content, excerpt, image_url, source,
+        created_at, updated_at, published, featured, tags
     FROM news_articles
-    WHERE id = %s AND is_published = true
+    WHERE id = %s AND published = true
     """
     
     article = await fetch_one(query, (article_id,))
@@ -166,10 +167,10 @@ async def get_news_article(slug: str):
     """Get a single news article by slug using raw SQL."""
     query = """
     SELECT 
-        id, title, slug, content, excerpt, image_url, author_name,
-        created_at, updated_at, is_published, featured, category
+        id, title, slug, content, excerpt, image_url, source,
+        created_at, updated_at, published, featured, tags
     FROM news_articles
-    WHERE slug = %s AND is_published = true
+    WHERE slug = %s AND published = true
     """
     
     article = await fetch_one(query, (slug,))
@@ -189,25 +190,26 @@ async def create_news_article(article: NewsArticleCreate):
     # Insert the news article
     query = """
     INSERT INTO news_articles 
-    (title, slug, content, excerpt, image_url, author_name, is_published, featured, category, created_at, updated_at)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    (id, title, slug, content, excerpt, image_url, source, published, featured, tags, created_at, updated_at)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
-    from datetime import datetime
     now = datetime.now()
+    article_id = uuid.uuid4()
     
     await execute_query(
         query, 
         (
+            article_id,
             article.title, 
             article.slug, 
             article.content, 
             article.excerpt, 
             article.image_url, 
-            article.author_name,
-            article.is_published, 
+            article.source,
+            article.published, 
             article.featured,
-            article.category,
+            article.tags,
             now,
             now
         )
@@ -218,7 +220,7 @@ async def create_news_article(article: NewsArticleCreate):
     return result
 
 @router.put("/{article_id}", response_model=NewsArticleResponse)
-async def update_news_article(article_id: int, article_update: NewsArticleUpdate):
+async def update_news_article(article_id: UUID, article_update: NewsArticleUpdate):
     """Update an existing news article using raw SQL."""
     # First check if the article exists
     existing = await fetch_one("SELECT slug FROM news_articles WHERE id = %s", (article_id,))
@@ -251,7 +253,7 @@ async def update_news_article(article_id: int, article_update: NewsArticleUpdate
         params.append(article_update.image_url)
     
     if article_update.is_published is not None:
-        update_fields.append("is_published = %s")
+        update_fields.append("published = %s")
         params.append(article_update.is_published)
     
     if article_update.featured is not None:
@@ -276,7 +278,7 @@ async def update_news_article(article_id: int, article_update: NewsArticleUpdate
     return result
 
 @router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_news_article(article_id: int):
+async def delete_news_article(article_id: UUID):
     """Delete a news article using raw SQL."""
     # Get the slug before deletion to clear cache
     article = await fetch_one(
@@ -296,21 +298,21 @@ async def delete_news_article(article_id: int):
     
     return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)
 
-@router.patch("/{article_id}/publish", response_model=NewsArticleResponse)
-async def toggle_news_article_publish(article_id: int):
+@router.patch("/{article_id}/toggle-publish")
+async def toggle_news_article_publish(article_id: UUID):
     """Toggle the published status of a news article."""
     # First check if the article exists
-    existing = await fetch_one("SELECT id, is_published FROM news_articles WHERE id = %s", (article_id,))
+    existing = await fetch_one("SELECT id, published FROM news_articles WHERE id = %s", (article_id,))
     
     if not existing:
         raise HTTPException(status_code=404, detail="News article not found")
     
     # Toggle the published status
-    new_published_status = not existing["is_published"]
+    new_published_status = not existing["published"]
     
     # Update the article
     await execute_query(
-        "UPDATE news_articles SET is_published = %s, updated_at = %s WHERE id = %s",
+        "UPDATE news_articles SET published = %s, updated_at = %s WHERE id = %s",
         (new_published_status, datetime.now(), article_id)
     )
     

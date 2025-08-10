@@ -1,0 +1,15 @@
+meta {
+  name: blog-id
+  type: http
+  seq: 9
+}
+
+get {
+  url: http://127.0.0.1:8000/api/blog/id/{post_id}
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

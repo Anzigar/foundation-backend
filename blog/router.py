@@ -1,20 +1,22 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 import json  # Add this import at the top
 
 from blog.schemas import (
     BlogPostCreate, 
-    BlogPostResponse,
-    BlogPostUpdate,
-    BlogPostListItem
+    BlogPostResponse
 )
+from blog.models import BlogPost
 from shared.utils import generate_slug
 from shared.database import get_db
 from shared.helpers import fetch_all, fetch_one, execute_query
+from shared.deployment_utils import deploy_content, undeploy_content, get_deployment_status, DeploymentError
 
 router = APIRouter()
 
@@ -203,7 +205,7 @@ async def get_blog_post(slug: str):
     return formatted_post
 
 @router.get("/id/{post_id}", response_model=BlogPostResponse)
-async def get_blog_post_by_id(post_id: int):
+async def get_blog_post_by_id(post_id: UUID):
     """Get a single blog post by ID."""
     query = """
     SELECT 
@@ -271,13 +273,15 @@ async def create_blog_post(post: BlogPostCreate):
     # Insert the blog post
     query = """
     INSERT INTO blog_posts (
-        title, slug, content, excerpt, image_url, author_name, tags,
+        id, title, slug, content, excerpt, image_url, author_name, tags,
         is_published, featured, seo_title, meta_description, created_at, updated_at
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
     from datetime import datetime
+    import uuid
     now = datetime.now()
+    post_id = uuid.uuid4()
     
     # Convert tag list to comma-separated string if provided
     tags_str = ",".join(post.tags) if post.tags else ""
@@ -285,7 +289,7 @@ async def create_blog_post(post: BlogPostCreate):
     await execute_query(
         query, 
         (
-            post.title, post.slug, post.content, post.excerpt, post.image_url,
+            post_id, post.title, post.slug, post.content, post.excerpt, post.image_url,
             post.author_name, tags_str, post.is_published, post.featured,
             post.seo_title, post.meta_description, now, now
         )
@@ -364,17 +368,20 @@ async def create_blog_post_draft(post: BlogPostCreate):
     # Insert the blog post as a draft (is_published = false)
     query = """
     INSERT INTO blog_posts (
-        title, slug, content, excerpt, image_url, author_name, tags,
+        id, title, slug, content, excerpt, image_url, author_name, tags,
         is_published, featured, seo_title, meta_description, created_at, updated_at
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
     from datetime import datetime
+    import uuid
     now = datetime.now()
+    post_id = uuid.uuid4()
     
     await execute_query(
         query, 
         (
+            post_id,
             post.title, 
             post.slug, 
             post.content, 
@@ -430,6 +437,104 @@ async def sync_offline_blog_post(post: BlogPostCreate):
     
     # Use the same logic as create_blog_post but with offline handling
     return await create_blog_post(post)
+
+
+# Deployment endpoints
+@router.post("/{blog_id}/deploy")
+async def deploy_blog_post(
+    blog_id: UUID, 
+    force: bool = Query(False, description="Force deployment even if already deployed"),
+    db: Session = Depends(get_db)
+):
+    """Deploy a blog post, making it live and preventing duplicate deployments."""
+    try:
+        # Fetch the blog post
+        blog_post = db.query(BlogPost).filter(BlogPost.id == blog_id).first()
+        if not blog_post:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+        
+        # Deploy the content
+        result = deploy_content(db, blog_post, force=force)
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": result,
+                "blog_post": {
+                    "id": str(blog_post.id),
+                    "title": blog_post.title,
+                    "slug": blog_post.slug,
+                    "is_deployed": blog_post.is_deployed,
+                    "deployment_count": blog_post.deployment_count
+                }
+            }
+        )
+        
+    except DeploymentError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deployment failed: {str(e)}")
+
+
+@router.post("/{blog_id}/undeploy")
+async def undeploy_blog_post(
+    blog_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """Undeploy a blog post, taking it offline."""
+    try:
+        # Fetch the blog post
+        blog_post = db.query(BlogPost).filter(BlogPost.id == blog_id).first()
+        if not blog_post:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+        
+        # Undeploy the content
+        result = undeploy_content(db, blog_post)
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": result,
+                "blog_post": {
+                    "id": str(blog_post.id),
+                    "title": blog_post.title,
+                    "slug": blog_post.slug,
+                    "is_deployed": blog_post.is_deployed
+                }
+            }
+        )
+        
+    except DeploymentError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Undeployment failed: {str(e)}")
+
+
+@router.get("/{blog_id}/deployment-status")
+async def get_blog_deployment_status(
+    blog_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """Get deployment status for a blog post."""
+    try:
+        blog_post = db.query(BlogPost).filter(BlogPost.id == blog_id).first()
+        if not blog_post:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+        
+        status_info = get_deployment_status(blog_post)
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": status_info
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get deployment status: {str(e)}")
 
 @router.get("/debug-slugs")
 async def debug_existing_slugs():

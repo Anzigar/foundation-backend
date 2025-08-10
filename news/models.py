@@ -1,45 +1,40 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, JSON
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, JSON, CheckConstraint, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
+import uuid
 
 from shared.database import Base
 
-class NewsCategory(Base):
-    """News category model."""
-    __tablename__ = "news_categories"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), unique=True, nullable=False)
-    slug = Column(String(50), unique=True, nullable=False, index=True)
-    description = Column(String(255))
+# Note: NewsCategory is removed - use shared.category_models.Category with content_type='news'
 
 class NewsArticle(Base):
-    """Enhanced news article model with comprehensive content components."""
+    """News article model focused on news content only."""
     __tablename__ = "news_articles"
     
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     title = Column(String(255), nullable=False)
     slug = Column(String(255), unique=True, nullable=False, index=True)
     content = Column(Text, nullable=False)
     excerpt = Column(String(500))
-    image_url = Column(String(255))
+    image_url = Column(String(255), CheckConstraint("image_url ~ '^https?://'"))
     source = Column(String(255))
-    tags = Column(String(255))  # Keywords/Tags as comma-separated string
+    author_name = Column(String(100))
+    author_bio = Column(Text)
+    tags = Column(JSON, default=list)  # Standardized as JSON array
     published = Column(Boolean, default=False)
+    
+    # Deployment tracking
+    is_deployed = Column(Boolean, default=False)  # Current deployment status
+    deployed_at = Column(DateTime)  # When it was deployed
+    deployment_count = Column(Integer, default=0)  # Track number of deployments
+    
     featured = Column(Boolean, default=False)
     allow_comments = Column(Boolean, default=True)
     seo_title = Column(String(255))
     meta_description = Column(String(255))
-    og_image_url = Column(String(255))
+    og_image_url = Column(String(255), CheckConstraint("og_image_url ~ '^https?://'"))
     contact_info = Column(Text)
-    
-    # Event-specific fields (for when this is used as an event)
-    venue = Column(String(255))
-    location = Column(String(255))
-    registration_link = Column(String(255))
-    ticket_price = Column(String(100))
-    event_start_date = Column(DateTime)
-    event_end_date = Column(DateTime)
     
     # Timestamps
     published_at = Column(DateTime, default=func.now())
@@ -49,3 +44,10 @@ class NewsArticle(Base):
     # Relationships as JSON (simplified)
     category_ids = Column(JSON, default=list)
     related_news_ids = Column(JSON, default=list)
+    related_event_ids = Column(JSON, default=list)  # Link to related events
+    
+    # Table constraints to prevent duplicate deployments
+    __table_args__ = (
+        UniqueConstraint('title', 'is_deployed', name='uq_news_title_deployed'),
+        {'extend_existing': True}
+    )

@@ -1,16 +1,17 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from uuid import UUID
+from pydantic import BaseModel, field_serializer
 
 class NewsArticleCreate(BaseModel):
     title: str
     content: str
     excerpt: Optional[str] = None
     image_url: Optional[str] = None
-    author_name: str = "Admin"
-    is_published: bool = False
+    source: str = "Admin"
+    published: bool = False
     featured: bool = False
-    category: Optional[str] = None
+    tags: Optional[str] = None
     slug: Optional[str] = None
 
 class NewsArticleUpdate(BaseModel):
@@ -18,43 +19,42 @@ class NewsArticleUpdate(BaseModel):
     content: Optional[str] = None
     excerpt: Optional[str] = None
     image_url: Optional[str] = None
-    author_name: Optional[str] = None
-    is_published: Optional[bool] = None
+    source: Optional[str] = None
+    published: Optional[bool] = None
     featured: Optional[bool] = None
-    category: Optional[str] = None
+    tags: Optional[str] = None
 
 class NewsArticleResponse(BaseModel):
-    id: int
+    id: UUID
     title: str
     slug: str
     content: str
     excerpt: Optional[str] = None
     image_url: Optional[str] = None
-    author_name: str
-    is_published: bool
+    source: Optional[str] = None
+    published: bool
     featured: bool
-    category: Optional[str] = None
+    tags: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    
+    @field_serializer('id')
+    def serialize_id(self, value: UUID) -> str:
+        """Convert UUID to string for JSON serialization"""
+        return str(value)
 
 class NewsArticleListItem(BaseModel):
-    id: int
+    id: UUID
     title: str
     slug: str
     excerpt: Optional[str] = None
     image_url: Optional[str] = None
-    author_name: str
-    category: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-    is_published: bool
+    source: Optional[str] = None
+    published: bool
     featured: bool
-    id: int
-    title: str
-    slug: str
-    excerpt: Optional[str] = None
-    image_url: Optional[str] = None
-    published: bool = False
-    featured: bool = False
     created_at: datetime
-    author_id: int
+    
+    @field_serializer('id')
+    def serialize_id(self, value: UUID) -> str:
+        """Convert UUID to string for JSON serialization"""
+        return str(value)

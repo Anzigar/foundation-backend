@@ -1,0 +1,15 @@
+meta {
+  name: delete-project
+  type: http
+  seq: 11
+}
+
+delete {
+  url: http://127.0.0.1:8000/api/projects/{project_id}
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

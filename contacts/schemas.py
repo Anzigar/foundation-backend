@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 class ContactBase(BaseModel):
@@ -13,11 +14,11 @@ class ContactCreate(ContactBase):
     pass
 
 class ContactResponse(ContactBase):
-    id: int
-    created_at: datetime
-    responded: bool = False
+    id: UUID
+    created_at: Optional[datetime] = None
+    responded: Optional[bool] = False
     responded_at: Optional[datetime] = None
-    responded_by: Optional[int] = None
+    responded_by: Optional[UUID] = None
     
     class Config:
         from_attributes = True
@@ -27,7 +28,7 @@ class ContactResponse(ContactBase):
 
 class ContactUpdate(BaseModel):
     responded: bool = True
-    responded_by: int
+    responded_by: UUID
 
 # Newsletter schemas
 class NewsletterSubscriptionBase(BaseModel):
@@ -39,6 +40,6 @@ class NewsletterSubscriptionCreate(NewsletterSubscriptionBase):
     pass
 
 class NewsletterSubscriptionResponse(NewsletterSubscriptionBase):
-    id: int
+    id: UUID
     subscribed_at: datetime
     is_active: bool = True

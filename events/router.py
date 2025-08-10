@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
@@ -89,41 +90,26 @@ async def get_events(
         "has_more": has_more
     }
 
-@router.get("/id/{event_id}", response_model=EventResponse)
-async def get_event_by_id(event_id: int):
-    """Get a single event by ID using raw SQL."""
-    query = """
-    SELECT * FROM events
-    WHERE id = %s AND published = true
-    """
-    
-    event = await fetch_one(query, (event_id,))
-    
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-    
-    # Transform the database response to match the schema
-    event_dict = dict(event)
-    event_dict.update({
-        'organizer_id': None,
-        'view_count': 0,
-        'share_count': 0,
-        'comment_count': 0,
-        'categories': [],
-        'related_events': []
-    })
-    
-    return event_dict
-
-@router.get("/{slug}", response_model=EventResponse)
-async def get_event(slug: str):
-    """Get a single event by slug using raw SQL."""
-    query = """
-    SELECT * FROM events
-    WHERE slug = %s AND published = true
-    """
-    
-    event = await fetch_one(query, (slug,))
+@router.get("/{identifier}", response_model=EventResponse)
+async def get_event(identifier: str):
+    """Get a single event by UUID or slug using raw SQL."""
+    # Try to determine if identifier is a UUID or slug
+    try:
+        # Try to parse as UUID
+        event_uuid = UUID(identifier)
+        # Get event by UUID
+        query = """
+        SELECT * FROM events
+        WHERE id = %s AND published = true
+        """
+        event = await fetch_one(query, (event_uuid,))
+    except ValueError:
+        # Get event by slug
+        query = """
+        SELECT * FROM events
+        WHERE slug = %s AND published = true
+        """
+        event = await fetch_one(query, (identifier,))
     
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -149,10 +135,13 @@ async def create_event(event: EventCreate):
         event.slug = generate_slug(event.title)
     
     # Insert the event
+    import uuid
+    event_id = uuid.uuid4()
+    
     query = """
     INSERT INTO events 
-    (title, slug, description, excerpt, location, start_date, end_date, image_url, published, featured)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    (id, title, slug, description, excerpt, location, start_date, end_date, image_url, published, featured)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
     # Convert timezone-aware datetime to timezone-naive for database compatibility
@@ -162,6 +151,7 @@ async def create_event(event: EventCreate):
     await execute_query(
         query, 
         (
+            event_id,
             event.title, 
             event.slug, 
             event.description,
@@ -176,10 +166,23 @@ async def create_event(event: EventCreate):
     )
     
     # Get the newly created event
-    return await get_event(event.slug)
+    new_event = await fetch_one("SELECT * FROM events WHERE id = %s", (event_id,))
+    
+    # Transform the database response to match the schema
+    event_dict = dict(new_event)
+    event_dict.update({
+        'organizer_id': None,
+        'view_count': 0,
+        'share_count': 0,
+        'comment_count': 0,
+        'categories': [],
+        'related_events': []
+    })
+    
+    return event_dict
 
 @router.put("/{event_id}", response_model=EventResponse)
-async def update_event(event_id: int, event_update: EventUpdate):
+async def update_event(event_id: UUID, event_update: EventUpdate):
     """Update an existing event using raw SQL."""
     # First check if the event exists
     existing = await fetch_one("SELECT slug FROM events WHERE id = %s", (event_id,))
@@ -230,11 +233,24 @@ async def update_event(event_id: int, event_update: EventUpdate):
         params.append(event_id)
         await execute_query(update_query, tuple(params))
     
-    # Get the updated event
-    return await get_event(existing["slug"])
+    # Get the updated event by ID
+    updated_event = await fetch_one("SELECT * FROM events WHERE id = %s", (event_id,))
+    
+    # Transform the database response to match the schema
+    event_dict = dict(updated_event)
+    event_dict.update({
+        'organizer_id': None,
+        'view_count': 0,
+        'share_count': 0,
+        'comment_count': 0,
+        'categories': [],
+        'related_events': []
+    })
+    
+    return event_dict
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_event(event_id: int):
+async def delete_event(event_id: UUID):
     """Delete an event using raw SQL."""
     # Get the slug before deletion to clear cache
     event = await fetch_one(
@@ -252,7 +268,7 @@ async def delete_event(event_id: int):
 
 # Event registration routes
 @router.post("/{event_id}/register", response_model=EventRegistrationResponse)
-async def register_for_event(event_id: int, registration: EventRegistrationCreate):
+async def register_for_event(event_id: UUID, registration: EventRegistrationCreate):
     """Register for an event."""
     # Check if event exists and is published
     event = await fetch_one(
@@ -284,7 +300,7 @@ async def register_for_event(event_id: int, registration: EventRegistrationCreat
     return new_registration
 
 @router.get("/{event_id}/registrations", response_model=List[EventRegistrationResponse])
-async def get_event_registrations(event_id: int):
+async def get_event_registrations(event_id: UUID):
     """Get all registrations for an event."""
     # Check if event exists
     event = await fetch_one("SELECT id FROM events WHERE id = %s", (event_id,))

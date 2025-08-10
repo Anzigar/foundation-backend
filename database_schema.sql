@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS blog_posts (
     excerpt TEXT,
     content TEXT NOT NULL,
     author_id INTEGER REFERENCES users(id),
-    category_id INTEGER REFERENCES blog_categories(id),
     featured_image_id INTEGER REFERENCES media(id),
     meta_title VARCHAR(60),
     meta_description VARCHAR(160),

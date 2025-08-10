@@ -12,8 +12,10 @@ from news.router import router as news_router
 from events.router import router as events_router
 from contacts.router import router as contacts_router
 from blog.router import router as blog_router
-from api.uploads import router as uploads_router
+from api.file_uploads import router as uploads_router
 from projects.router import router as projects_router
+from migrations.router import router as migrations_router
+from auth.router import router as auth_router
 
 # Import the database session dependency instead of get_pool
 from shared.database import get_db, create_tables
@@ -184,12 +186,14 @@ async def add_process_time_header(request: Request, call_next):
 
 # Include routers
 app.include_router(health_router, prefix="/api", tags=["Health"])
+app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(news_router, prefix="/api/news", tags=["News"])
 app.include_router(events_router, prefix="/api/events", tags=["Events"])
 app.include_router(contacts_router, prefix="/api/contacts", tags=["Contacts"])
 app.include_router(blog_router, prefix="/api/blog", tags=["Blog"])
 app.include_router(uploads_router, prefix="/api/uploads", tags=["Uploads"])
 app.include_router(projects_router, prefix="/api/projects", tags=["Projects"])
+app.include_router(migrations_router, prefix="/api", tags=["Migrations"])
 # Uncomment these as you create the corresponding modules
 # app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 

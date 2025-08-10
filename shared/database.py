@@ -44,7 +44,15 @@ async def get_db():
 
 # Function to create all tables defined in our models
 async def create_tables():
-    from blog.models import Base  # Import here to avoid circular imports
+    # Import all models to ensure they are registered with Base
+    from blog.models import BlogPost
+    from news.models import NewsArticle  
+    from events.models import Event
+    from projects.models import Project, ProjectImage
+    from contacts.models import Contact, NewsletterSubscriber
+    from shared.models import User
+    from shared.category_models import Category
+    from shared.image_models import ContentImage, ImageTag, ContentImageTag
     
     async with engine.begin() as conn:
         logger.info("Creating database tables if they don't exist")

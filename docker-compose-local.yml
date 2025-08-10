@@ -11,8 +11,7 @@ services:
       - "5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
-      # Password removed for passwordless auth
-      - POSTGRES_HOST_AUTH_METHOD=trust  # Allow connections without password
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data

@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from contacts.schemas import (
@@ -16,7 +16,7 @@ from shared.helpers import fetch_all, fetch_one, execute_query
 
 # Constants
 CONTACT_NOT_FOUND = "Contact not found"
-SELECT_CONTACT_BY_ID = "SELECT * FROM contacts WHERE id = ?"
+SELECT_CONTACT_BY_ID = "SELECT * FROM contacts WHERE id = %s"
 
 router = APIRouter()
 
@@ -45,7 +45,7 @@ async def get_contacts(
     
     # Apply filters
     if responded is not None:
-        query += " AND responded = ?"
+        query += " AND responded = %s"
         params.append(responded)
     
     # Apply cursor pagination
@@ -83,9 +83,9 @@ async def get_contacts(
     }
 
 @router.get("/{contact_id}", response_model=ContactResponse)
-async def get_contact(contact_id: int, db: AsyncSession = Depends(get_db)):
+async def get_contact(contact_id: UUID, db: AsyncSession = Depends(get_db)):
     """Get a single contact by ID using raw SQL."""
-    contact = await fetch_one("SELECT * FROM contacts WHERE id = ?", (contact_id,), db)
+    contact = await fetch_one("SELECT * FROM contacts WHERE id = %s", (contact_id,), db)
     
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -95,35 +95,27 @@ async def get_contact(contact_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/", response_model=ContactResponse, status_code=status.HTTP_201_CREATED)
 async def create_contact(contact: ContactCreate, db: AsyncSession = Depends(get_db)):
     """Create a new contact submission using raw SQL."""
+    import uuid
+    contact_id = uuid.uuid4()
+    
     query = """
-    INSERT INTO contacts (full_name, email, phone_number, subject, message)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO contacts (id, full_name, email, phone_number, subject, message)
+    VALUES (%s, %s, %s, %s, %s, %s)
     """
     
     try:
         await execute_query(
             query, 
-            (contact.full_name, contact.email, contact.phone_number, contact.subject, contact.message),
+            (contact_id, contact.full_name, contact.email, contact.phone_number, contact.subject, contact.message),
             db
         )
         
-        contact_id = await fetch_one("SELECT last_insert_rowid() as id", db=db)
-        
-        # Add null check to avoid TypeError
-        if contact_id is None or "id" not in contact_id:
-            # Fallback for when LAST_INSERT_ID doesn't work (like in some mock DB scenarios)
-            # Get the most recently added contact as a fallback
-            new_contact = await fetch_one(
-                "SELECT * FROM contacts ORDER BY id DESC LIMIT 1",
-                db=db
-            )
-        else:
-            # Get the newly created contact
-            new_contact = await fetch_one(
-                "SELECT * FROM contacts WHERE id = ?", 
-                (contact_id["id"],),
-                db
-            )
+        # Get the newly created contact using the UUID we just inserted
+        new_contact = await fetch_one(
+            "SELECT * FROM contacts WHERE id = %s", 
+            (contact_id,),
+            db
+        )
         
         # Final safety check
         if new_contact is None:
@@ -153,11 +145,11 @@ async def create_contact(contact: ContactCreate, db: AsyncSession = Depends(get_
             detail=f"Failed to create contact: {str(e)}"
         )
 
-@router.put("/{contact_id}", response_model=ContactResponse)
-async def mark_as_responded(contact_id: int, update: ContactUpdate):
+@router.patch("/{contact_id}/respond", response_model=ContactResponse)
+async def mark_as_responded(contact_id: UUID, update: ContactUpdate):
     """Mark a contact as responded."""
     # Check if contact exists
-    contact = await fetch_one("SELECT * FROM contacts WHERE id = ?", (contact_id,))
+    contact = await fetch_one("SELECT * FROM contacts WHERE id = %s", (contact_id,))
     
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -177,21 +169,21 @@ async def mark_as_responded(contact_id: int, update: ContactUpdate):
     )
     
     # Get the updated contact
-    updated_contact = await fetch_one("SELECT * FROM contacts WHERE id = ?", (contact_id,))
+    updated_contact = await fetch_one("SELECT * FROM contacts WHERE id = %s", (contact_id,))
     
     return updated_contact
 
 @router.delete("/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_contact(contact_id: int):
+async def delete_contact(contact_id: UUID):
     """Delete a contact using raw SQL."""
     # Check if contact exists
-    contact = await fetch_one("SELECT id FROM contacts WHERE id = ?", (contact_id,))
+    contact = await fetch_one("SELECT id FROM contacts WHERE id = %s", (contact_id,))
     
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
     
     # Delete the contact
-    await execute_query("DELETE FROM contacts WHERE id = ?", (contact_id,))
+    await execute_query("DELETE FROM contacts WHERE id = %s", (contact_id,))
     
     return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)
     
@@ -216,7 +208,7 @@ async def subscribe_newsletter(
     """Subscribe to newsletter."""
     # Check if email already exists
     existing = await fetch_one(
-        "SELECT id FROM newsletter_subscribers WHERE email = ?",
+        "SELECT id FROM newsletter_subscribers WHERE email = %s",
         (subscription.email,),
         db
     )
@@ -231,9 +223,11 @@ async def subscribe_newsletter(
         return {"message": "Newsletter subscription updated"}
     else:
         # Create new subscription
+        import uuid
+        subscriber_id = uuid.uuid4()
         await execute_query(
-            "INSERT INTO newsletter_subscribers (email, name, source) VALUES (?, ?, ?)",
-            (subscription.email, subscription.name, subscription.source),
+            "INSERT INTO newsletter_subscribers (id, email, name, source) VALUES (%s, %s, %s, %s)",
+            (subscriber_id, subscription.email, subscription.name, subscription.source),
             db
         )
         return {"message": "Successfully subscribed to newsletter"}
