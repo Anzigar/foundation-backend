@@ -1,8 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, JSON, CheckConstraint, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
-import uuid
 
 from shared.database import Base
 
@@ -12,7 +10,7 @@ class NewsArticle(Base):
     """News article model focused on news content only."""
     __tablename__ = "news_articles"
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     title = Column(String(255), nullable=False)
     slug = Column(String(255), unique=True, nullable=False, index=True)
     content = Column(Text, nullable=False)

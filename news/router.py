@@ -1,7 +1,5 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-import uuid
-from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
@@ -145,7 +143,7 @@ async def get_news_articles(
     }
 
 @router.get("/id/{article_id}", response_model=NewsArticleResponse)
-async def get_news_article_by_id(article_id: UUID):
+async def get_news_article_by_id(article_id: int):
     """Get a single news article by ID using raw SQL."""
     query = """
     SELECT 
@@ -187,20 +185,18 @@ async def create_news_article(article: NewsArticleCreate):
     if not article.slug:
         article.slug = generate_slug(article.title)
     
-    # Insert the news article
+    # Insert the news article (let database auto-generate ID)
     query = """
     INSERT INTO news_articles 
-    (id, title, slug, content, excerpt, image_url, source, published, featured, tags, created_at, updated_at)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    (title, slug, content, excerpt, image_url, source, published, featured, tags, created_at, updated_at)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
     now = datetime.now()
-    article_id = uuid.uuid4()
     
     await execute_query(
         query, 
         (
-            article_id,
             article.title, 
             article.slug, 
             article.content, 
@@ -220,7 +216,7 @@ async def create_news_article(article: NewsArticleCreate):
     return result
 
 @router.put("/{article_id}", response_model=NewsArticleResponse)
-async def update_news_article(article_id: UUID, article_update: NewsArticleUpdate):
+async def update_news_article(article_id: int, article_update: NewsArticleUpdate):
     """Update an existing news article using raw SQL."""
     # First check if the article exists
     existing = await fetch_one("SELECT slug FROM news_articles WHERE id = %s", (article_id,))
@@ -278,7 +274,7 @@ async def update_news_article(article_id: UUID, article_update: NewsArticleUpdat
     return result
 
 @router.delete("/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_news_article(article_id: UUID):
+async def delete_news_article(article_id: int):
     """Delete a news article using raw SQL."""
     # Get the slug before deletion to clear cache
     article = await fetch_one(
@@ -299,7 +295,7 @@ async def delete_news_article(article_id: UUID):
     return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)
 
 @router.patch("/{article_id}/toggle-publish")
-async def toggle_news_article_publish(article_id: UUID):
+async def toggle_news_article_publish(article_id: int):
     """Toggle the published status of a news article."""
     # First check if the article exists
     existing = await fetch_one("SELECT id, published FROM news_articles WHERE id = %s", (article_id,))
