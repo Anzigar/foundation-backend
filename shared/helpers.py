@@ -76,7 +76,18 @@ async def _fetch_with_session(query: str, params: Optional[tuple], session: Asyn
                 # Convert string UUID to uuid.UUID object for PostgreSQL
                 converted_params[i] = uuid.UUID(converted_params[i])
         
-        result = await session.execute(text(query), tuple(converted_params))
+        # SQLAlchemy text() with %s placeholders expects parameters as a dictionary when using execute()
+        # Convert the query to use named parameters and create a parameter dictionary
+        param_dict = {}
+        modified_query = query
+        
+        for i, param in enumerate(converted_params):
+            param_name = f"param{i+1}"
+            param_dict[param_name] = param
+            # Replace the first %s with :param_name
+            modified_query = modified_query.replace('%s', f':{param_name}', 1)
+        
+        result = await session.execute(text(modified_query), param_dict)
     else:
         result = await session.execute(text(query))
     
@@ -109,7 +120,18 @@ async def _execute_with_session(query: str, params: Optional[tuple], session: As
                 # Convert string UUID to uuid.UUID object for PostgreSQL
                 converted_params[i] = uuid.UUID(converted_params[i])
         
-        result = await session.execute(text(query), tuple(converted_params))
+        # SQLAlchemy text() with %s placeholders expects parameters as a dictionary when using execute()
+        # Convert the query to use named parameters and create a parameter dictionary
+        param_dict = {}
+        modified_query = query
+        
+        for i, param in enumerate(converted_params):
+            param_name = f"param{i+1}"
+            param_dict[param_name] = param
+            # Replace the first %s with :param_name
+            modified_query = modified_query.replace('%s', f':{param_name}', 1)
+        
+        result = await session.execute(text(modified_query), param_dict)
     else:
         result = await session.execute(text(query))
     
