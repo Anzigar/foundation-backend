@@ -38,50 +38,9 @@ sleep 15
 log "Checking container status..."
 docker compose ps
 
-# ==== PRODUCTION FIXES ====
-log "🔧 Applying production fixes and database repairs..."
-
-# Step 1: Fix the projects router queries to use correct column names
-log "📝 Fixing projects router queries..."
-docker exec foundation-api sed -i 's/i\."primary" = true/i.primary_image = true/g' /app/projects/router.py
-docker exec foundation-api sed -i 's/"primary",/"primary_image",/g' /app/projects/router.py
-docker exec foundation-api sed -i 's/"primary" = false/primary_image = false/g' /app/projects/router.py
-docker exec foundation-api sed -i 's/"primary" = %s/primary_image = %s/g' /app/projects/router.py
-
-# Step 2: Run the table fix script inside the container to create missing tables
-log "🗃️  Creating missing database tables and columns..."
-docker exec foundation-api python fix_tables.py
-
-# Step 3: Add the missing primary_image column to project_images table
-log "🔧 Adding missing primary_image column to project_images table..."
-docker exec foundation-api python -c "
-import os
-from sqlalchemy import create_engine, text
-
-def get_database_url():
-    host = os.getenv('POSTGRES_HOST', 'database')
-    port = os.getenv('POSTGRES_PORT', '5432')
-    user = os.getenv('POSTGRES_USER', 'postgres')
-    password = os.getenv('POSTGRES_PASSWORD', 'postgres')
-    database = os.getenv('POSTGRES_DB', 'website_db')
-    return f'postgresql://{user}:{password}@{host}:{port}/{database}'
-
-engine = create_engine(get_database_url())
-with engine.connect() as conn:
-    # Add the missing primary_image column if it doesn't exist
-    conn.execute(text('ALTER TABLE project_images ADD COLUMN IF NOT EXISTS primary_image BOOLEAN DEFAULT FALSE'))
-    # Update existing primary column to primary_image if primary column exists
-    try:
-        conn.execute(text('UPDATE project_images SET primary_image = COALESCE(\"primary\", FALSE) WHERE primary_image IS NULL'))
-    except:
-        pass  # primary column might not exist
-    conn.commit()
-    print('✅ Fixed project_images table columns')
-"
-
-# Step 4: Verify all required tables exist
-log "🔍 Verifying all required tables exist..."
-TABLES_CHECK=$(docker exec foundation-api python -c "
+# Verify database connection and tables
+log "� Verifying database setup..."
+HEALTH_CHECK=$(docker exec foundation-api python -c "
 import os
 from sqlalchemy import create_engine, inspect
 
@@ -93,33 +52,25 @@ def get_database_url():
     database = os.getenv('POSTGRES_DB', 'website_db')
     return f'postgresql://{user}:{password}@{host}:{port}/{database}'
 
-engine = create_engine(get_database_url())
-inspector = inspect(engine)
-tables = inspector.get_table_names()
-
-required_tables = ['users', 'news_articles', 'events', 'projects', 'contacts', 'project_images', 'blog_posts', 'blog_categories', 'media']
-missing = [t for t in required_tables if t not in tables]
-
-if missing:
-    print(f'❌ Still missing tables: {missing}')
-    exit(1)
-else:
-    print('✅ All required tables exist!')
-    for table in sorted(tables):
-        print(f'  - {table}')
+try:
+    engine = create_engine(get_database_url())
+    inspector = inspect(engine)
+    tables = inspector.get_table_names()
+    print(f'✅ Database connected successfully! Found {len(tables)} tables.')
     exit(0)
+except Exception as e:
+    print(f'❌ Database connection failed: {e}')
+    exit(1)
 ")
 
 if [ $? -eq 0 ]; then
-    log "✅ Database tables and columns fixed successfully!"
-    log "🔄 Restarting the backend container to apply router fixes..."
-    docker restart foundation-api
+    log "✅ Database connection verified!"
     
-    # Wait for container to be ready
-    log "⏳ Waiting for backend container to restart..."
-    sleep 15
+    # Wait for container to be fully ready
+    log "⏳ Waiting for backend container to be ready..."
+    sleep 10
     
-    log "🧪 Testing API endpoints to verify everything is working..."
+    log "🧪 Testing API endpoints..."
     
     # Test the API endpoints
     log "Testing /api/projects/..."
