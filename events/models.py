@@ -1,8 +1,8 @@
 from datetime import datetime
-import uuid
-from sqlalchemy import Boolean, Column, DateTime, String, Text
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
+import uuid
 
 from shared.database import Base
 
@@ -12,7 +12,7 @@ class Event(Base):
     """Event model aligned with the actual database schema."""
     __tablename__ = "events"
     
-    # Primary key - using UUID like news_articles
+    # Primary key - using UUID for security
     uid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     title = Column(String(255), nullable=False)
     slug = Column(String(255), unique=True, nullable=False, index=True)

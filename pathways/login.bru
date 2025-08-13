@@ -4,10 +4,17 @@ meta {
   seq: 18
 }
 
-get {
-  url: 
-  body: none
+post {
+  url: https://backend.pathwaysfoundationforthepoor.org/api/auth/login/
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "email_or_username": "mkai@gmail.com",
+    "password": "SecurePassword123!"
+  }
 }
 
 settings {

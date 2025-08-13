@@ -18,17 +18,14 @@ class NewsArticle(Base):
     slug = Column(String(255), unique=True, nullable=False, index=True)
     
     # Content fields
-    content = Column(Text, nullable=False)
+    content = Column(Text)
     excerpt = Column(String(500))
     image_url = Column(String(255))
-    source = Column(String(255))
     tags = Column(String(255))  # Database has this as varchar(255), not JSON
     
     # Publishing status
     published = Column(Boolean, default=False)
-    is_published = Column(Boolean, default=False)  # Database has both fields
     featured = Column(Boolean, default=False)
-    allow_comments = Column(Boolean, default=True)
     
     # SEO fields
     seo_title = Column(String(255))
@@ -36,26 +33,14 @@ class NewsArticle(Base):
     og_image_url = Column(String(255))
     
     # Additional content fields from database
-    contact_info = Column(Text)
     author_name = Column(String(100))
-    category = Column(String(100))
-    
-    # Event-related fields (this table seems to handle both news and events)
-    venue = Column(String(255))
-    location = Column(String(255))
-    registration_link = Column(String(255))
-    ticket_price = Column(String(100))
-    event_start_date = Column(DateTime)
-    event_end_date = Column(DateTime)
     
     # Timestamps
-    published_at = Column(DateTime, default=func.now())
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
     # JSON relationships (using JSONB as in database)
     category_ids = Column(JSONB, default=list)
-    related_news_ids = Column(JSONB, default=list)
     
     # Table options
     __table_args__ = {'extend_existing': True}

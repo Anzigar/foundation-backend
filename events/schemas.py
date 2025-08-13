@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field, EmailStr, HttpUrl
 from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr, HttpUrl
 
 class EventCategoryBase(BaseModel):
     name: str
@@ -12,22 +12,7 @@ class EventCategoryCreate(EventCategoryBase):
     pass
 
 class EventCategoryResponse(EventCategoryBase):
-    uid: Union[int, UUID]  # Support both int and UUID during transition
-    
-    class Config:
-        from_attributes = True
-from pydantic import BaseModel, Field, EmailStr, HttpUrl
-
-class EventCategoryBase(BaseModel):
-    name: str
-    slug: str
-    description: Optional[str] = None
-
-class EventCategoryCreate(EventCategoryBase):
-    pass
-
-class EventCategoryResponse(EventCategoryBase):
-    uid: Union[int, UUID]  # Support both int and UUID during transition
+    uid: UUID  # Use UUID for security
     
     class Config:
         from_attributes = True
@@ -84,9 +69,9 @@ class EventUpdate(BaseModel):
     related_event_ids: Optional[List[str]] = None
 
 class EventResponse(EventBase):
-    uid: Union[int, UUID]  # Support both int and UUID during transition
+    uid: UUID  # Use UUID for security
     slug: str
-    organizer_id: Optional[Union[int, UUID]] = None
+    organizer_id: Optional[UUID] = None
     published_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -101,7 +86,7 @@ class EventResponse(EventBase):
         extra = "ignore"
 
 class EventListItem(BaseModel):
-    uid: UUID  # Changed to UUID
+    uid: UUID  # Use UUID for security
     title: str
     slug: str
     location: Optional[str]
@@ -122,21 +107,27 @@ class EventRegistrationCreate(BaseModel):
 
 class EventRegistrationResponse(EventRegistrationCreate):
     uid: UUID
-    event_id: UUID
+    event_uid: UUID
     created_at: datetime
+    
+    class Config:
+        from_attributes = True
 
 class EventCommentBase(BaseModel):
     author_name: str
     author_email: EmailStr
     content: str
-    parent_id: Optional[int] = None
+    parent_uid: Optional[UUID] = None
 
 class EventCommentCreate(EventCommentBase):
     pass
 
 class EventCommentResponse(EventCommentBase):
     uid: UUID
-    event_id: UUID
+    event_uid: UUID
     is_approved: bool
     created_at: datetime
     replies: Optional[List["EventCommentResponse"]] = []
+    
+    class Config:
+        from_attributes = True

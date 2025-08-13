@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 from fastapi import HTTPException, UploadFile
 
 from config import settings
+from shared.utils import encode_s3_path, decode_s3_path, generate_secure_filename
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,8 @@ class S3Storage:
         self, 
         file: UploadFile, 
         folder: str = "uploads",
-        custom_filename: Optional[str] = None
+        custom_filename: Optional[str] = None,
+        encode_path: bool = True
     ) -> Tuple[bool, str, Optional[str]]:
         """
         Upload a file to S3 bucket.
@@ -46,18 +48,21 @@ class S3Storage:
         Args:
             file: The file to upload
             folder: The folder within the bucket to store the file
-            custom_filename: Optional custom filename, if not provided a UUID will be generated
+            custom_filename: Optional custom filename, if not provided a secure filename will be generated
+            encode_path: Whether to return encoded path for security (default: True)
             
         Returns:
-            Tuple of (success status, message, url if successful)
+            Tuple of (success status, message, url/encoded_path if successful)
         """
         if not self.s3_client:
             return False, "S3 client not initialized", None
             
         try:
-            # Generate unique filename if not provided
-            file_extension = os.path.splitext(file.filename)[1].lower()
-            filename = custom_filename or f"{uuid.uuid4()}{file_extension}"
+            # Generate secure filename if not provided
+            if custom_filename:
+                filename = custom_filename
+            else:
+                filename = generate_secure_filename(file.filename, folder.replace("/", "_"))
             
             # Construct S3 path
             s3_path = f"{folder}/{filename}"
@@ -76,7 +81,13 @@ class S3Storage:
             if response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 200:
                 # Generate URL for the uploaded file
                 file_url = f"https://{self.bucket_name}.s3.{self.region_name}.amazonaws.com/{s3_path}"
-                return True, "File uploaded successfully", file_url
+                
+                # Return encoded path if requested, otherwise return full URL
+                if encode_path:
+                    encoded_path = encode_s3_path(file_url)
+                    return True, "File uploaded successfully", encoded_path
+                else:
+                    return True, "File uploaded successfully", file_url
             else:
                 return False, "Failed to upload file", None
                 
@@ -90,12 +101,29 @@ class S3Storage:
             # Reset file position for potential reuse
             await file.seek(0)
     
-    def delete_file(self, file_url: str) -> Tuple[bool, str]:
+    def get_actual_url(self, encoded_path_or_url: str) -> str:
+        """
+        Get the actual S3 URL from an encoded path or return the URL if it's already decoded.
+        
+        Args:
+            encoded_path_or_url: Encoded path or full S3 URL
+            
+        Returns:
+            Full S3 URL
+        """
+        # If it's already a full URL, return as is
+        if encoded_path_or_url.startswith('http'):
+            return encoded_path_or_url
+        
+        # Otherwise, decode the path
+        return decode_s3_path(encoded_path_or_url, self.bucket_name, self.region_name)
+    
+    def delete_file(self, encoded_path_or_url: str) -> Tuple[bool, str]:
         """
         Delete a file from S3 bucket.
         
         Args:
-            file_url: Full URL of the file to delete
+            encoded_path_or_url: Encoded path or full URL of the file to delete
             
         Returns:
             Tuple of (success status, message)
@@ -104,6 +132,9 @@ class S3Storage:
             return False, "S3 client not initialized"
             
         try:
+            # Get the actual URL if it's encoded
+            file_url = self.get_actual_url(encoded_path_or_url)
+            
             # Extract key from URL
             path_parts = file_url.split(f"{self.bucket_name}.s3.{self.region_name}.amazonaws.com/")[1]
             

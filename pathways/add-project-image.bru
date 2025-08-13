@@ -4,10 +4,23 @@ meta {
   seq: 13
 }
 
-get {
-  url: 
-  body: none
+post {
+  url: http://127.0.0.1:8000/api/projects/2ce7eb01-bbb4-40ef-8408-a4109c3f1332/images
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "title": "Ms. Happy A. Msolla delivering opening remarks",
+    "description": "The Bunju Ward Community Development Officer addresses students and community members at the event.",
+    "image_url": "https://example.com/ms-happy-msolla-delivering-remarks.jpg",
+    "primary": true,
+    "order_index": 1,
+    "id": "2ce7eb01-bbb4-40ef-8408-a4109c3f1332",
+    "project_id": "2ce7eb01-bbb4-40ef-8408-a4109c3f1332",
+    "created_at": "2025-08-10T08:52:39Z"
+  }
 }
 
 settings {

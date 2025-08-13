@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 import uuid
 
@@ -11,6 +11,7 @@ from news.schemas import (
 )
 from shared.utils import generate_slug
 from shared.helpers import fetch_all, fetch_one, execute_query
+from shared.storage import storage
 
 router = APIRouter()
 
@@ -28,13 +29,11 @@ def format_news_with_categories(news_items: List[Dict[str, Any]]) -> List[Dict[s
                 "slug": item["slug"],
                 "excerpt": item["excerpt"],
                 "image_url": item["image_url"],
-                "published_at": item["published_at"],
                 "created_at": item["created_at"],
                 "updated_at": item["updated_at"],
                 "published": bool(item["published"]),
-                "is_published": bool(item["is_published"]),
                 "featured": bool(item["featured"]),
-                "content": item["content"],
+                "content": item.get("content"),
                 "categories": []
             }
             result.append(current_news)
@@ -68,10 +67,10 @@ async def get_news_articles(
     # Base query using correct column names from database schema
     query = """
     SELECT 
-        uid, title, slug, excerpt, image_url, source, tags,
-        created_at, updated_at, published, is_published, featured
+        uid, title, slug, excerpt, image_url, tags,
+        created_at, updated_at, published, featured
     FROM news_articles
-    WHERE is_published = true
+    WHERE published = true
     """
     
     params = []
@@ -121,12 +120,10 @@ async def get_news_articles(
             "slug": item["slug"],
             "excerpt": item["excerpt"],
             "image_url": item["image_url"],
-            "source": item["source"],
             "tags": item["tags"],
             "created_at": item["created_at"],
             "updated_at": item["updated_at"],
             "published": item["published"],
-            "is_published": item["is_published"],
             "featured": item["featured"]
         }
         formatted_news.append(formatted_item)
@@ -150,14 +147,12 @@ async def get_news_article_by_id(article_id: str):
     """Get a single news article by UID using raw SQL."""
     query = """
     SELECT 
-        uid, title, slug, content, excerpt, image_url, source, tags,
-        published, is_published, featured, allow_comments,
-        seo_title, meta_description, og_image_url, contact_info,
-        author_name, category, venue, location, registration_link,
-        ticket_price, event_start_date, event_end_date,
-        published_at, created_at, updated_at, category_ids, related_news_ids
+        uid, title, slug, content, excerpt, image_url, tags,
+        published, featured, 
+        seo_title, meta_description, og_image_url,
+        author_name, created_at, updated_at, category_ids
     FROM news_articles
-    WHERE uid = %s AND is_published = true
+    WHERE uid = %s AND published = true
     """
     
     article = await fetch_one(query, (article_id,))
@@ -172,14 +167,12 @@ async def get_news_article(slug: str):
     """Get a single news article by slug using raw SQL."""
     query = """
     SELECT 
-        uid, title, slug, content, excerpt, image_url, source, tags,
-        published, is_published, featured, allow_comments,
-        seo_title, meta_description, og_image_url, contact_info,
-        author_name, category, venue, location, registration_link,
-        ticket_price, event_start_date, event_end_date,
-        published_at, created_at, updated_at, category_ids, related_news_ids
+        uid, title, slug, content, excerpt, image_url, tags,
+        published, featured,
+        seo_title, meta_description, og_image_url,
+        author_name, created_at, updated_at, category_ids
     FROM news_articles
-    WHERE slug = %s AND is_published = true
+    WHERE slug = %s AND published = true
     """
     
     article = await fetch_one(query, (slug,))
@@ -199,13 +192,10 @@ async def create_news_article(article: NewsArticleCreate):
     # Insert the news article with all fields from the database schema
     query = """
     INSERT INTO news_articles 
-    (uid, title, slug, content, excerpt, image_url, source, tags,
-     published, is_published, featured, allow_comments,
-     seo_title, meta_description, og_image_url, contact_info,
-     author_name, category, venue, location, registration_link,
-     ticket_price, event_start_date, event_end_date,
-     published_at, created_at, updated_at, category_ids, related_news_ids)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    (uid, title, slug, content, excerpt, image_url, tags,
+     published, featured, seo_title, meta_description, og_image_url,
+     author_name, created_at, updated_at, category_ids)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
     now = datetime.now()
@@ -220,29 +210,16 @@ async def create_news_article(article: NewsArticleCreate):
             article.content, 
             article.excerpt, 
             article.image_url, 
-            article.source,
             article.tags,
             article.published,
-            article.is_published,
             article.featured,
-            article.allow_comments,
             article.seo_title,
             article.meta_description,
             article.og_image_url,
-            article.contact_info,
             article.author_name,
-            article.category,
-            article.venue,
-            article.location,
-            article.registration_link,
-            article.ticket_price,
-            article.event_start_date,
-            article.event_end_date,
-            now,  # published_at
             now,  # created_at
             now,  # updated_at
-            article.category_ids,
-            article.related_news_ids
+            article.category_ids
         )
     )
     
@@ -260,26 +237,14 @@ def build_update_fields_and_params(article_update: NewsArticleUpdate):
         'content': article_update.content,
         'excerpt': article_update.excerpt,
         'image_url': article_update.image_url,
-        'source': article_update.source,
         'tags': article_update.tags,
         'published': article_update.published,
-        'is_published': article_update.is_published,
         'featured': article_update.featured,
-        'allow_comments': article_update.allow_comments,
         'seo_title': article_update.seo_title,
         'meta_description': article_update.meta_description,
         'og_image_url': article_update.og_image_url,
-        'contact_info': article_update.contact_info,
         'author_name': article_update.author_name,
-        'category': article_update.category,
-        'venue': article_update.venue,
-        'location': article_update.location,
-        'registration_link': article_update.registration_link,
-        'ticket_price': article_update.ticket_price,
-        'event_start_date': article_update.event_start_date,
-        'event_end_date': article_update.event_end_date,
-        'category_ids': article_update.category_ids,
-        'related_news_ids': article_update.related_news_ids
+        'category_ids': article_update.category_ids
     }
     
     # Add fields that have values
@@ -352,20 +317,161 @@ async def delete_news_article(article_id: str):
 async def toggle_news_article_publish(article_id: str):
     """Toggle the published status of a news article."""
     # First check if the article exists
-    existing = await fetch_one("SELECT uid, is_published FROM news_articles WHERE uid = %s", (article_id,))
+    existing = await fetch_one("SELECT uid, published FROM news_articles WHERE uid = %s", (article_id,))
     
     if not existing:
         raise HTTPException(status_code=404, detail="News article not found")
     
     # Toggle the published status
-    new_published_status = not existing["is_published"]
+    new_published_status = not existing["published"]
     
     # Update the article
     await execute_query(
-        "UPDATE news_articles SET is_published = %s, updated_at = %s WHERE uid = %s",
+        "UPDATE news_articles SET published = %s, updated_at = %s WHERE uid = %s",
         (new_published_status, datetime.now(), article_id)
     )
     
     # Get the updated article
     result = await fetch_one("SELECT * FROM news_articles WHERE uid = %s", (article_id,))
     return result
+
+# S3 Image Upload Endpoints
+@router.post("/upload-image")
+async def upload_news_image(
+    file: UploadFile = File(...),
+    news_uid: Optional[str] = Form(None)
+):
+    """Upload an image to S3 and optionally associate it with a news article."""
+    try:
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type {file.content_type} not allowed. Supported types: {', '.join(allowed_types)}"
+            )
+        
+        # Validate file size (max 10MB)
+        max_size = 10 * 1024 * 1024  # 10MB in bytes
+        contents = await file.read()
+        if len(contents) > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail="File size exceeds 10MB limit"
+            )
+        
+        # Reset file pointer for upload
+        await file.seek(0)
+        
+        # Create folder path for news images
+        folder_path = "news/images"
+        
+        # Upload to S3 with encoded path
+        upload_result = await storage.upload_file(
+            file=file,
+            folder_path=folder_path,
+            encode_path=True  # Enable path encoding for security
+        )
+        
+        # If news_uid provided, update the news article's image_url
+        if news_uid:
+            from shared.database import async_session
+            async with async_session() as session:
+                try:
+                    # Update the news article with the encoded image path
+                    update_query = """
+                    UPDATE news_articles 
+                    SET image_url = %s, updated_at = %s 
+                    WHERE uid = %s
+                    """
+                    await execute_query(update_query, (upload_result["url"], datetime.now(), news_uid), session)
+                    await session.commit()
+                except Exception as e:
+                    await session.rollback()
+                    # Still return upload success even if DB update fails
+                    upload_result["warning"] = f"Image uploaded but failed to update news article: {str(e)}"
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": upload_result,
+                "message": "Image uploaded successfully"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Upload failed: {str(e)}"
+        )
+
+@router.delete("/delete-image")
+async def delete_news_image(
+    image_url: str = Form(...),
+    news_uid: Optional[str] = Form(None)
+):
+    """Delete an image from S3 and optionally remove it from news article."""
+    try:
+        # Delete from S3
+        delete_result = await storage.delete_file(image_url)
+        
+        # If news_uid provided, clear the image_url from the news article
+        if news_uid:
+            from shared.database import async_session
+            async with async_session() as session:
+                try:
+                    # Clear the image_url in the news article
+                    update_query = """
+                    UPDATE news_articles 
+                    SET image_url = NULL, updated_at = %s 
+                    WHERE uid = %s AND image_url = %s
+                    """
+                    await execute_query(update_query, (datetime.now(), news_uid, image_url), session)
+                    await session.commit()
+                except Exception as e:
+                    await session.rollback()
+                    delete_result["warning"] = f"Image deleted but failed to update news article: {str(e)}"
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": delete_result,
+                "message": "Image deleted successfully"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Delete failed: {str(e)}"
+        )
+
+@router.get("/get-image-url")
+async def get_news_image_url(encoded_path: str = Query(..., description="Encoded S3 path")):
+    """Get the actual S3 URL from an encoded path."""
+    try:
+        actual_url = storage.get_actual_url(encoded_path)
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "data": {
+                    "encoded_path": encoded_path,
+                    "actual_url": actual_url
+                },
+                "message": "URL retrieved successfully"
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to decode URL: {str(e)}"
+        )

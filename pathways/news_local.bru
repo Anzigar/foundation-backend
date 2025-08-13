@@ -6,8 +6,38 @@ meta {
 
 post {
   url: http://127.0.0.1:8000/api/news/
-  body: none
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "title": "string",
+    "description": "string",
+    "excerpt": "string",
+    "location": "string",
+    "venue_details": "string",
+    "map_embed_url": "string",
+    "start_date": "2019-08-24T14:15:22Z",
+    "end_date": "2019-08-24T14:15:22Z",
+    "image_url": "string",
+    "ticket_price": "string",
+    "registration_link": "string",
+    "rsvp_enabled": false,
+    "contact_info": "string",
+    "tags": "string",
+    "published": false,
+    "featured": false,
+    "allow_comments": true,
+    "seo_title": "string",
+    "meta_description": "string",
+    "og_image_url": "string",
+    "slug": "string",
+    "category_ids": [],
+    "related_event_ids": [
+      "string"
+    ]
+  }
 }
 
 settings {

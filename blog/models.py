@@ -23,7 +23,7 @@ class BlogPost(Base):
     cta_link = Column(String(255), CheckConstraint("cta_link ~ '^https?://'"))
     # Remove tag duplication - use only JSON array for tags
     tags = Column(JSON, default=list)  # Array of tag strings
-    is_published = Column(Boolean, default=False)
+    published = Column(Boolean, default=False)
     published_at = Column(DateTime)  # Timestamp when first published
     last_published_at = Column(DateTime)  # Timestamp of last publication
     deployment_count = Column(Integer, default=0)  # Track number of deployments
@@ -50,7 +50,7 @@ class BlogPost(Base):
 
     # Table constraints to prevent duplicate deployments
     __table_args__ = (
-        UniqueConstraint('title', 'is_published', name='uq_blog_post_title_published'),
+        UniqueConstraint('title', 'published', name='uq_blog_post_title_published'),
         {'extend_existing': True}
     )
 

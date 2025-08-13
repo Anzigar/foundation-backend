@@ -55,40 +55,35 @@ class ProjectCreate(BaseModel):
     title: str
     slug: Optional[str] = None
     description: str
-    project_image: Optional[str] = None
-    project_image_preview: Optional[str] = None
-    image_title: Optional[str] = None
-    image_description: Optional[str] = None
-    source_link: Optional[str] = None
-    live_link: Optional[str] = None
-    technologies: List[str] = []
-    is_ongoing: bool = True
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    excerpt: Optional[str] = None
+    content: Optional[str] = None
+    image_url: Optional[str] = None
+    status: str = "current"
     featured: bool = False
-    public: bool = True
-    images: Optional[List[ProjectImageCreate]] = []
+    published: bool = True
 
 class ProjectUpdate(BaseModel):
     title: Optional[str] = None
     slug: Optional[str] = None
     description: Optional[str] = None
-    project_image: Optional[str] = None
-    project_image_preview: Optional[str] = None
-    image_title: Optional[str] = None
-    image_description: Optional[str] = None
-    source_link: Optional[str] = None
-    live_link: Optional[str] = None
-    technologies: Optional[List[str]] = None
-    is_ongoing: Optional[bool] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    excerpt: Optional[str] = None
+    content: Optional[str] = None
+    image_url: Optional[str] = None
+    status: Optional[str] = None
     featured: Optional[bool] = None
-    public: Optional[bool] = None
+    published: Optional[bool] = None
 
-class ProjectResponse(ProjectCreate):
+class ProjectResponse(BaseModel):
     id: UUID
+    title: str
     slug: str
+    description: str
+    excerpt: Optional[str] = None
+    content: Optional[str] = None
+    image_url: Optional[str] = None
+    status: str
+    published: bool
+    featured: bool
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     images: List[ProjectImageResponse] = []

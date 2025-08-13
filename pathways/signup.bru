@@ -4,10 +4,20 @@ meta {
   seq: 17
 }
 
-get {
-  url: 
-  body: none
+post {
+  url: https://backend.pathwaysfoundationforthepoor.org/api/auth/register/
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "full_name": "Mkai Hilary",
+    "username": "Mkai",
+    "phone_number": "+255 784 123 456",
+    "password": "SecurePassword123!",
+    "email": "mkai@gmail.com"
+  }
 }
 
 settings {

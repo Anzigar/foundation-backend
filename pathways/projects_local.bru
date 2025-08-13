@@ -5,9 +5,46 @@ meta {
 }
 
 post {
-  url: 
-  body: none
+  url: http://127.0.0.1:8000/api/projects/
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "title": "Empowering Youth through Football",
+    "slug": "empowering-youth-football",
+    "description": "Pathways Foundation for the Poor (PFP) is running a transformative project to combat child abuse and gender-based violence by integrating football training with child rights education for 1,200 pupils in Bunju Ward, Kinondoni.",
+    "project_image": "https://example.com/ms-happy-msolla-delivering-remarks.jpg",
+    "project_image_preview": "https://example.com/pfp-football-tournament-preview.jpg",
+    "image_title": "Children and officials at the Football Tournament",
+    "image_description": "Ms. Happy A. Msolla delivering opening remarks during the Football Tournament event, with students and officials in attendance.",
+    "source_link": "https://www.example.com/pathways-blog-post",
+    "live_link": "https://www.pathwaysfoundation.org/our-work/bunju-ward",
+    "technologies": [
+      "Community Development",
+      "Social Work",
+      "Child Rights Education",
+      "Sports for Development"
+    ],
+    "is_ongoing": false,
+    "start_date": "2025-01-01T00:00:00Z",
+    "end_date": "2025-07-31T23:59:59Z",
+    "featured": true,
+    "public": true,
+    "images": [
+      {
+        "url": "https://example.com/ms-happy-msolla-remarks.jpg",
+        "title": "Ms. Happy A. Msolla delivering opening remarks",
+        "description": "The Bunju Ward Community Development Officer addresses students and community members at the event."
+      },
+      {
+        "url": "https://example.com/pfp-girls-football-team.jpg",
+        "title": "Girls' football team in Bunju Ward",
+        "description": "A girls' team in their new uniforms, showing the increase in female participation."
+      }
+    ]
+  }
 }
 
 settings {

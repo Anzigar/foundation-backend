@@ -31,43 +31,41 @@ async def get_projects(
     search: Optional[str] = Query(None, description="Search in title or description")
 ):
     """Get paginated projects with cursor-based pagination."""
-    # Base query - updated to match actual model structure
+    # Base query - updated to match actual database structure
     query = """
     SELECT 
-        p.uid, p.title, p.slug, p.description, p.project_image, 
-        p.featured, p.is_ongoing, p.start_date, p.end_date, p.created_at,
-        i.uid as image_uid, i.title as image_title, 
-        i.description as image_description, i.image_url
-    FROM projects p
-    LEFT JOIN project_images i ON p.uid = i.project_uid
-    WHERE p.public = true
+        uid, title, slug, description, excerpt, content, status, 
+        published, featured, created_at, updated_at,
+        image_url, category_ids
+    FROM projects
+    WHERE published = true
     """
     
     params = []
     
     # Apply filters
     if featured is not None:
-        query += " AND p.featured = %s"
+        query += " AND featured = %s"
         params.append(featured)
     
     if search:
-        query += " AND (p.title LIKE %s OR p.description LIKE %s)"
+        query += " AND (title LIKE %s OR description LIKE %s)"
         search_term = f"%{search}%"
         params.extend([search_term, search_term])
     
     # Apply cursor pagination
     if cursor:
         if order.lower() == "desc":
-            query += " AND p.uid < %s"
+            query += " AND uid < %s"
         else:
-            query += " AND p.uid > %s"
+            query += " AND uid > %s"
         params.append(cursor)
     
     # Order the results
     if order.lower() == "desc":
-        query += " ORDER BY p.uid DESC"
+        query += " ORDER BY uid DESC"
     else:
-        query += " ORDER BY p.uid ASC"
+        query += " ORDER BY uid ASC"
     
     # Get one more item to check if there are more results
     query += f" LIMIT {limit + 1}"
@@ -75,41 +73,26 @@ async def get_projects(
     # Execute the query with parameters
     projects = await fetch_all(query, tuple(params) if params else None)
     
-    # Format projects with primary image
+    # Format projects
     formatted_projects = []
-    seen_projects = set()
     
     for item in projects:
-        if item["id"] not in seen_projects:
-            project = {
-                "id": item["id"],
-                "title": item["title"],
-                "slug": item["slug"],
-                "description": item["description"],
-                "project_image": item["project_image"],
-                "featured": bool(item["featured"]),
-                "is_ongoing": bool(item["is_ongoing"]),
-                "start_date": item["start_date"],
-                "end_date": item["end_date"],
-                "created_at": item["created_at"],
-                "primary_image": None
-            }
-            
-            # Add primary image if it exists
-            if item["image_id"]:
-                project["primary_image"] = {
-                    "id": item["image_id"],
-                    "title": item["image_title"],
-                    "description": item["image_description"],
-                    "image_url": item["image_url"],
-                    "project_id": item["id"],
-                    "is_primary": True,
-                    "order_index": 0,
-                    "created_at": item["created_at"]
-                }
-            
-            formatted_projects.append(project)
-            seen_projects.add(item["id"])
+        project = {
+            "id": item["uid"],
+            "title": item["title"],
+            "slug": item["slug"],
+            "description": item["description"],
+            "excerpt": item["excerpt"],
+            "content": item["content"],
+            "status": item["status"],
+            "published": bool(item["published"]),
+            "featured": bool(item["featured"]),
+            "image_url": item["image_url"],
+            "category_ids": item["category_ids"],
+            "created_at": item["created_at"],
+            "updated_at": item["updated_at"]
+        }
+        formatted_projects.append(project)
     
     # Check if there are more results
     has_more = len(formatted_projects) > limit
@@ -133,28 +116,20 @@ async def get_project(identifier: str):
         # Try to parse as UUID
         project_uuid = UUID(identifier)
         # Get project by UUID
-        project_query = "SELECT * FROM projects WHERE uid = %s AND public = true"
+        project_query = "SELECT * FROM projects WHERE uid = %s AND published = true"
         project = await fetch_one(project_query, (project_uuid,))
     except ValueError:
         # Get project by slug
-        project_query = "SELECT * FROM projects WHERE slug = %s AND public = true"
+        project_query = "SELECT * FROM projects WHERE slug = %s AND published = true"
         project = await fetch_one(project_query, (identifier,))
     
     if not project:
         raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)
     
-    # Get project images
-    images_query = """
-    SELECT * FROM project_images 
-    WHERE project_uid = %s
-    ORDER BY order_index ASC, created_at ASC
-    """
-    
-    images = await fetch_all(images_query, (project["uid"],))
-    
-    # Combine project and images
+    # Convert project to dict and return (no images in this schema)
     project_dict = dict(project)
-    project_dict["images"] = images or []
+    project_dict["id"] = project_dict["uid"]  # Map uid to id for response
+    project_dict["images"] = []  # Empty images list for compatibility
     
     return project_dict
 
@@ -166,7 +141,7 @@ async def create_project(project: ProjectCreate):
         project.slug = generate_slug(project.title)
     
     # Check for slug uniqueness
-    existing = await fetch_one("SELECT id FROM projects WHERE slug = %s", (project.slug,))
+    existing = await fetch_one("SELECT uid FROM projects WHERE slug = %s", (project.slug,))
     if existing:
         raise HTTPException(
             status_code=400, 
@@ -176,21 +151,15 @@ async def create_project(project: ProjectCreate):
     # Insert the project
     query = """
     INSERT INTO projects (
-        uid, title, slug, description, project_image, project_image_preview,
-        image_title, image_description, source_link, live_link, technologies,
-        is_ongoing, start_date, end_date, featured, public
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        uid, title, slug, description, excerpt, content, status, published, featured,
+        image_url, category_ids
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     
     # Convert technologies to JSON string
     import json
     import uuid
     project_uid = uuid.uuid4()
-    technologies_json = json.dumps(project.technologies) if project.technologies else "[]"
-    
-    # Convert timezone-aware datetimes to timezone-naive for database compatibility
-    start_date_naive = project.start_date.replace(tzinfo=None) if project.start_date else None
-    end_date_naive = project.end_date.replace(tzinfo=None) if project.end_date else None
     
     await execute_query(
         query, 
@@ -198,57 +167,22 @@ async def create_project(project: ProjectCreate):
             project_uid,
             project.title, 
             project.slug, 
-            project.description, 
-            project.project_image,
-            project.project_image_preview,
-            project.image_title,
-            project.image_description,
-            project.source_link,
-            project.live_link,
-            technologies_json,
-            project.is_ongoing,
-            start_date_naive,
-            end_date_naive,
+            project.description,
+            project.excerpt or project.description[:500] if project.description else None,  # excerpt
+            project.content or project.description,  # content
+            project.status,  # status from schema
+            project.published,  # published from schema
             project.featured,
-            project.public
+            project.image_url,  # image_url from schema
+            "[]"  # empty category_ids
         )
     )
     
     # Get the created project
     result = await fetch_one("SELECT * FROM projects WHERE slug = %s", (project.slug,))
-    project_uid = result["uid"]
-    
-    # Add images if provided
-    if project.images:
-        for i, image in enumerate(project.images):
-            import uuid
-            image_uid = uuid.uuid4()
-            
-            image_query = """
-            INSERT INTO project_images (
-                uid, project_uid, title, description, image_url, 
-                is_primary, order_index
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            
-            # First image is primary by default if none specified
-            is_primary = image.is_primary or (i == 0 and not any(img.is_primary for img in project.images))
-            
-            await execute_query(
-                image_query,
-                (
-                    image_uid,
-                    project_uid,
-                    image.title,
-                    image.description,
-                    image.image_url,
-                    is_primary,
-                    image.order_index or i
-                )
-            )
     
     # Return the newly created project
-    return await get_project(str(result["id"]))
+    return await get_project(str(result["uid"]))
 
 @router.put("/{project_uid}", response_model=ProjectResponse)
 async def update_project(project_uid: str, project_update: ProjectUpdate):
@@ -275,58 +209,13 @@ async def update_project(project_uid: str, project_update: ProjectUpdate):
         update_fields.append("description = %s")
         params.append(project_update.description)
     
-    if project_update.project_image is not None:
-        update_fields.append("project_image = %s")
-        params.append(project_update.project_image)
-    
-    if project_update.project_image_preview is not None:
-        update_fields.append("project_image_preview = %s")
-        params.append(project_update.project_image_preview)
-    
-    if project_update.image_title is not None:
-        update_fields.append("image_title = %s")
-        params.append(project_update.image_title)
-    
-    if project_update.image_description is not None:
-        update_fields.append("image_description = %s")
-        params.append(project_update.image_description)
-    
-    if project_update.source_link is not None:
-        update_fields.append("source_link = %s")
-        params.append(project_update.source_link)
-    
-    if project_update.live_link is not None:
-        update_fields.append("live_link = %s")
-        params.append(project_update.live_link)
-    
-    if project_update.technologies is not None:
-        import json
-        update_fields.append("technologies = %s")
-        params.append(json.dumps(project_update.technologies))
-    
-    if project_update.is_ongoing is not None:
-        update_fields.append("is_ongoing = %s")
-        params.append(project_update.is_ongoing)
-    
-    if project_update.start_date is not None:
-        update_fields.append("start_date = %s")
-        # Convert timezone-aware datetime to timezone-naive for database compatibility
-        start_date_naive = project_update.start_date.replace(tzinfo=None) if project_update.start_date.tzinfo else project_update.start_date
-        params.append(start_date_naive)
-    
-    if project_update.end_date is not None:
-        update_fields.append("end_date = %s")
-        # Convert timezone-aware datetime to timezone-naive for database compatibility
-        end_date_naive = project_update.end_date.replace(tzinfo=None) if project_update.end_date.tzinfo else project_update.end_date
-        params.append(end_date_naive)
-    
     if project_update.featured is not None:
         update_fields.append("featured = %s")
         params.append(project_update.featured)
     
-    if project_update.public is not None:
-        update_fields.append("public = %s")
-        params.append(project_update.public)
+    if project_update.published is not None:
+        update_fields.append("published = %s")
+        params.append(project_update.published)
     
     # Update timestamp
     update_fields.append("updated_at = %s")
@@ -337,163 +226,132 @@ async def update_project(project_uid: str, project_update: ProjectUpdate):
         update_query = f"""
         UPDATE projects 
         SET {', '.join(update_fields)}
-        WHERE id = %s
+        WHERE uid = %s
         """
         
-        params.append(project_id)
+        params.append(project_uid)
         await execute_query(update_query, tuple(params))
     
     # Get the updated project
-    updated_project = await fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,))
-    return await get_project(str(updated_project["id"]))
+    updated_project = await fetch_one("SELECT uid FROM projects WHERE uid = %s", (project_uid,))
+    return await get_project(str(updated_project["uid"]))
 
-@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_project(project_id: UUID):
+@router.delete("/{project_uid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(project_uid: UUID):
     """Delete a project."""
     # Check if project exists
-    existing = await fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,))
+    existing = await fetch_one("SELECT uid FROM projects WHERE uid = %s", (project_uid,))
     
     if not existing:
         raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)
     
     # Delete the project (images will be deleted via CASCADE)
-    await execute_query("DELETE FROM projects WHERE id = %s", (project_id,))
+    await execute_query("DELETE FROM projects WHERE uid = %s", (project_uid,))
     
     return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)
 
-# Project Image Endpoints
-@router.post("/{project_id}/images", response_model=ProjectImageResponse, status_code=status.HTTP_201_CREATED)
-async def add_project_image(
-    project_id: UUID,
-    title: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    is_primary: bool = Form(False),
-    order_index: int = Form(0),
-    image: Optional[UploadFile] = File(None),
+# Image upload endpoint
+@router.post("/{project_uid}/upload-image")
+async def upload_project_image(
+    project_uid: UUID,
+    image: UploadFile = File(..., description="Project image file")
 ):
-    """Add an image to a project."""
+    """Upload an image for a project to S3."""
     # Check if project exists
-    project = await fetch_one("SELECT id FROM projects WHERE id = %s", (project_id,))
+    project = await fetch_one("SELECT uid FROM projects WHERE uid = %s", (str(project_uid),))
     
     if not project:
-        raise HTTPException(status_code=404, detail=PROJECT_NOT_FOUND)
+        raise HTTPException(status_code=404, detail="Project not found")
     
-    image_url = None
-    
-    # Upload the image if provided
-    if image and image.filename:
-        success, message, image_url = await storage.upload_file(
-            file=image,
-            folder=f"project-images/{project_id}",
-            custom_filename=None  # Generate a unique filename
-        )
-        
-        if not success:
-            raise HTTPException(status_code=500, detail=f"Failed to upload image: {message}")
-    
-    # If this is primary, update other images to not be primary
-    if is_primary:
-        await execute_query(
-            "UPDATE project_images SET is_primary = false WHERE project_id = %s",
-            (project_id,)
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if image.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed."
         )
     
-    # Add the image to the project
-    import uuid
-    image_id = uuid.uuid4()
+    # Upload image to S3 with encoded path
+    success, message, encoded_image_path = await storage.upload_file(
+        file=image,
+        folder=f"projects/{project_uid}",
+        custom_filename=None,  # Let it generate a secure filename
+        encode_path=True  # Return encoded path for security
+    )
     
-    query = """
-    INSERT INTO project_images (
-        id, project_id, title, description, image_url, is_primary, order_index
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """
+    if not success:
+        raise HTTPException(status_code=500, detail=f"Failed to upload image: {message}")
     
+    # Update project with the encoded image path
     await execute_query(
-        query,
-        (image_id, project_id, title, description, image_url, is_primary, order_index)
+        "UPDATE projects SET image_url = %s WHERE uid = %s", 
+        (encoded_image_path, str(project_uid))
     )
     
-    # Get the newly created image
-    result = await fetch_one(
-        "SELECT * FROM project_images WHERE id = %s", 
-        (image_id,)
+    return {
+        "success": True,
+        "message": "Image uploaded successfully",
+        "encoded_path": encoded_image_path,
+        "actual_url": storage.get_actual_url(encoded_image_path)
+    }
+
+@router.delete("/{project_uid}/image")
+async def delete_project_image(project_uid: UUID):
+    """Delete a project's image from S3 and database."""
+    # Get current image URL/encoded path
+    project = await fetch_one(
+        "SELECT image_url FROM projects WHERE uid = %s", 
+        (str(project_uid),)
     )
     
-    return result
-
-@router.put("/images/{image_id}", response_model=ProjectImageResponse)
-async def update_project_image(image_id: UUID, image_update: ProjectImageUpdate):
-    """Update a project image."""
-    # Check if image exists
-    existing = await fetch_one("SELECT * FROM project_images WHERE id = %s", (image_id,))
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
     
-    if not existing:
-        raise HTTPException(status_code=404, detail=IMAGE_NOT_FOUND)
+    if not project["image_url"]:
+        raise HTTPException(status_code=404, detail="Project has no image to delete")
     
-    # Build the update query dynamically based on provided fields
-    update_fields = []
-    params = []
+    # Delete from S3 (handles both encoded paths and full URLs)
+    success, message = storage.delete_file(project["image_url"])
     
-    if image_update.title is not None:
-        update_fields.append("title = %s")
-        params.append(image_update.title)
-    
-    if image_update.description is not None:
-        update_fields.append("description = %s")
-        params.append(image_update.description)
-    
-    if image_update.image_url is not None:
-        update_fields.append("image_url = %s")
-        params.append(image_update.image_url)
-    
-    if image_update.is_primary is not None:
-        update_fields.append("is_primary = %s")
-        params.append(image_update.is_primary)
+    if success:
+        # Remove image URL from database
+        await execute_query(
+            "UPDATE projects SET image_url = NULL WHERE uid = %s", 
+            (str(project_uid),)
+        )
         
-        # If setting as primary, update other images to not be primary
-        if image_update.is_primary:
-            await execute_query(
-                "UPDATE project_images SET is_primary = false WHERE project_id = %s AND id != %s",
-                (existing["project_id"], image_id)
-            )
-    
-    if image_update.order_index is not None:
-        update_fields.append("order_index = %s")
-        params.append(image_update.order_index)
-    
-    # Update the image if there are fields to update
-    if update_fields:
-        update_query = f"""
-        UPDATE project_images 
-        SET {', '.join(update_fields)}
-        WHERE id = %s
-        """
+        return {"success": True, "message": "Image deleted successfully"}
+    else:
+        # Still remove from database even if S3 deletion failed
+        await execute_query(
+            "UPDATE projects SET image_url = NULL WHERE uid = %s", 
+            (str(project_uid),)
+        )
         
-        params.append(image_id)
-        await execute_query(update_query, tuple(params))
-    
-    # Get the updated image
-    updated = await fetch_one("SELECT * FROM project_images WHERE id = %s", (image_id,))
-    return updated
+        return {
+            "success": False, 
+            "message": f"Warning: S3 deletion failed ({message}), but image URL removed from database"
+        }
 
-@router.delete("/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_project_image(image_id: UUID):
-    """Delete a project image."""
-    # Check if image exists
-    existing = await fetch_one("SELECT id, image_url FROM project_images WHERE id = %s", (image_id,))
+@router.get("/{project_uid}/image-url")
+async def get_project_image_url(project_uid: UUID):
+    """Get the actual S3 image URL from the encoded path stored in database."""
+    # Get project with image URL/encoded path
+    project = await fetch_one(
+        "SELECT image_url FROM projects WHERE uid = %s", 
+        (str(project_uid),)
+    )
     
-    if not existing:
-        raise HTTPException(status_code=404, detail=IMAGE_NOT_FOUND)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
     
-    # Delete the image
-    await execute_query("DELETE FROM project_images WHERE id = %s", (image_id,))
+    if not project["image_url"]:
+        raise HTTPException(status_code=404, detail="Project has no image")
     
-    # Clean up the actual image file from storage
-    try:
-        if existing["image_url"]:
-            await storage.delete_file(existing["image_url"])
-    except Exception as e:
-        # Log the error but don't fail the request
-        print(f"Warning: Could not delete image file {existing['image_url']}: {e}")
+    # Get the actual URL (decodes if it's encoded)
+    actual_url = storage.get_actual_url(project["image_url"])
     
-    return JSONResponse(content={}, status_code=status.HTTP_204_NO_CONTENT)
+    return {
+        "encoded_path": project["image_url"],
+        "actual_url": actual_url
+    }

@@ -1,11 +1,11 @@
 meta {
-  name: blog-id
+  name: get-project-slug
   type: http
-  seq: 9
+  seq: 22
 }
 
 get {
-  url: http://127.0.0.1:8000/api/blog/id/
+  url: http://127.0.0.1:8000/api/projects/{identifier}
   body: none
   auth: inherit
 }

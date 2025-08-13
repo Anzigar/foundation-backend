@@ -4,10 +4,26 @@ meta {
   seq: 10
 }
 
-get {
-  url: http://127.0.0.1:8000/api/projects/{project_id}
-  body: none
+put {
+  url: http://127.0.0.1:8000/api/projects/09850b7c-18e6-4d8f-8f9b-9da15adc1904
+  body: json
   auth: inherit
+}
+
+body:json {
+   {
+        "id": "09850b7c-18e6-4d8f-8f9b-9da15adc1904",
+        "title": "Empowering Youth through Football",
+        "slug": "empowering-youth-football",
+        "description": "Pathways Foundation for the Poor (PFP) is running a transformative project to combat child abuse and gender-based violence by integrating football training with child rights education for 1,300 pupils in Bunju Ward, Kinondoni only.",
+        "project_image": "https://example.com/pfp-football-tournament-main.jpg",
+        "featured": true,
+        "is_ongoing": false,
+        "start_date": "2025-01-01T00:00:00",
+        "end_date": "2025-07-31T23:59:59",
+        "created_at": null,
+        "primary_image": null
+      }
 }
 
 settings {
